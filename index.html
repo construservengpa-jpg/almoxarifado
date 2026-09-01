@@ -266,23 +266,26 @@
 
       <div class="subview" id="sub-localizacoes">
         <div class="inline-form">
-          <div id="locais-msg"></div>
+          <h3 style="font-size:14px;margin-bottom:12px;">Novo estoque</h3>
+          <div id="estoques-msg"></div>
           <div class="row-fields">
-            <div class="field"><label>Empresa</label><select id="local-empresa" onchange="atualizarParentsLocal()"></select></div>
-            <div class="field"><label>Tipo</label>
-              <select id="local-tipo">
-                <option value="galpao">Galpão</option>
-                <option value="rua">Rua</option>
-                <option value="estante">Estante</option>
-                <option value="prateleira">Prateleira</option>
-              </select>
-            </div>
-            <div class="field"><label>Localização superior (opcional)</label><select id="local-parent"><option value="">— nenhuma (nível raiz) —</option></select></div>
-            <div class="field"><label>Código</label><input id="local-codigo" placeholder="Ex: A, 1, D"></div>
+            <div class="field"><label>Empresa</label><select id="estoque-empresa"></select></div>
+            <div class="field"><label>Nome do estoque</label><input id="estoque-nome" placeholder="Ex: Almoxarifado Central, Canteiro Obra X"></div>
           </div>
-          <button class="btn small" onclick="salvarLocal()">Adicionar localização</button>
+          <button class="btn small" onclick="salvarEstoque()">Adicionar estoque</button>
         </div>
-        <div id="lista-locais"></div>
+        <div id="lista-estoques" style="margin-bottom:24px;"></div>
+
+        <div class="inline-form">
+          <h3 style="font-size:14px;margin-bottom:12px;">Novo endereço (dentro de um estoque)</h3>
+          <div id="enderecos-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Estoque</label><select id="endereco-estoque"></select></div>
+            <div class="field"><label>Endereço</label><input id="endereco-codigo" placeholder="Ex: Rua A - Estante 1 - Prateleira D"></div>
+          </div>
+          <button class="btn small" onclick="salvarEndereco()">Adicionar endereço</button>
+        </div>
+        <div id="lista-enderecos"></div>
       </div>
 
       <div class="subview" id="sub-usuarios">
@@ -711,7 +714,7 @@ async function abrirDetalheNota(notaId){
   document.getElementById('detalhe-nota-titulo').textContent = `Nota ${nota.numero}${nota.serie ? '/'+nota.serie : ''} — ${nota.fornecedores?.nome || ''}`;
   const { data: itens } = await sb.from('notas_fiscais_itens').select('*').eq('nota_id', notaId);
   const { data: insumos } = await sb.from('insumos').select('id, descricao, codigo_interno').eq('ativo', true).order('descricao');
-  const { data: locais } = await sb.from('localizacoes_caminho').select('id, caminho').eq('empresa_id', empresaAtual);
+  const { data: locais } = await sb.from('localizacoes_caminho').select('id, caminho').eq('empresa_id', empresaAtual).eq('tipo', 'endereco');
   const box = document.getElementById('detalhe-nota-itens');
   box.innerHTML = itens.map(item => renderNotaItemBlock(item, insumos, locais, nota.fornecedor_id)).join('');
   abrirModal('modal-detalhe-nota');
@@ -882,32 +885,45 @@ async function salvarInsumo(){
   if(!error){ ['insumo-codigo','insumo-descricao','insumo-min','insumo-barras'].forEach(id=>document.getElementById(id).value=''); carregarInsumosConfig(); }
 }
 
-/* --- Localizações --- */
-async function preencherSelectsLocaisConfig(){ await preencherSelect('local-empresa', 'empresas', 'id', 'razao_social'); await atualizarParentsLocal(); }
-async function atualizarParentsLocal(){
-  const empresa_id = document.getElementById('local-empresa').value;
-  const sel = document.getElementById('local-parent');
-  sel.innerHTML = '<option value="">— nenhuma (nível raiz) —</option>';
-  if(!empresa_id) return;
-  const { data } = await sb.from('localizacoes_caminho').select('id, caminho').eq('empresa_id', empresa_id);
-  (data||[]).forEach(l=> sel.innerHTML += `<option value="${l.id}">${l.caminho}</option>`);
+/* --- Estoques (nível raiz) e Endereços (dentro de um estoque) --- */
+async function preencherSelectsLocaisConfig(){
+  await preencherSelect('estoque-empresa', 'empresas', 'id', 'razao_social');
+  await preencherSelectEstoques('endereco-estoque');
+}
+async function preencherSelectEstoques(elementId){
+  const { data } = await sb.from('localizacoes').select('id, codigo').eq('tipo','estoque').order('codigo');
+  const el = document.getElementById(elementId);
+  el.innerHTML = '<option value="">Selecione…</option>' + (data||[]).map(e=>`<option value="${e.id}">${e.codigo}</option>`).join('');
 }
 async function carregarLocaisConfig(){
-  const { data } = await sb.from('localizacoes_caminho').select('caminho, tipo, empresa_id, empresas(razao_social)').order('caminho');
-  document.getElementById('lista-locais').innerHTML = renderTabelaSimples(data?.map(l=>({
-    caminho: l.caminho, tipo: l.tipo, empresa: l.empresas?.razao_social
-  })), [ { campo:'caminho', titulo:'Localização' }, { campo:'tipo', titulo:'Tipo' }, { campo:'empresa', titulo:'Empresa' } ], 'Nenhuma localização cadastrada.');
+  const { data: estoques } = await sb.from('localizacoes').select('codigo, empresas(razao_social)').eq('tipo','estoque').order('codigo');
+  document.getElementById('lista-estoques').innerHTML = renderTabelaSimples(estoques?.map(e=>({
+    nome: e.codigo, empresa: e.empresas?.razao_social
+  })), [ { campo:'nome', titulo:'Estoque' }, { campo:'empresa', titulo:'Empresa' } ], 'Nenhum estoque cadastrado.');
+
+  const { data: enderecos } = await sb.from('localizacoes_caminho').select('codigo, caminho').eq('tipo','endereco').order('caminho');
+  document.getElementById('lista-enderecos').innerHTML = renderTabelaSimples(enderecos?.map(e=>({
+    caminho: e.caminho
+  })), [ { campo:'caminho', titulo:'Endereço' } ], 'Nenhum endereço cadastrado.');
 }
-async function salvarLocal(){
-  const msg = document.getElementById('locais-msg');
-  const empresa_id = document.getElementById('local-empresa').value;
-  const tipo = document.getElementById('local-tipo').value;
-  const parent_id = document.getElementById('local-parent').value || null;
-  const codigo = document.getElementById('local-codigo').value.trim();
-  if(!empresa_id || !codigo){ msg.innerHTML = '<div class="msg error">Selecione a empresa e informe o código.</div>'; return; }
-  const { error } = await sb.from('localizacoes').insert({ empresa_id, tipo, parent_id, codigo });
-  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Localização cadastrada.</div>';
-  if(!error){ document.getElementById('local-codigo').value=''; carregarLocaisConfig(); atualizarParentsLocal(); }
+async function salvarEstoque(){
+  const msg = document.getElementById('estoques-msg');
+  const empresa_id = document.getElementById('estoque-empresa').value;
+  const codigo = document.getElementById('estoque-nome').value.trim();
+  if(!empresa_id || !codigo){ msg.innerHTML = '<div class="msg error">Selecione a empresa e informe o nome do estoque.</div>'; return; }
+  const { error } = await sb.from('localizacoes').insert({ empresa_id, tipo:'estoque', parent_id:null, codigo });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Estoque cadastrado.</div>';
+  if(!error){ document.getElementById('estoque-nome').value=''; carregarLocaisConfig(); preencherSelectEstoques('endereco-estoque'); }
+}
+async function salvarEndereco(){
+  const msg = document.getElementById('enderecos-msg');
+  const estoque_id = document.getElementById('endereco-estoque').value;
+  const codigo = document.getElementById('endereco-codigo').value.trim();
+  if(!estoque_id || !codigo){ msg.innerHTML = '<div class="msg error">Selecione o estoque e informe o endereço.</div>'; return; }
+  const { data: estoque } = await sb.from('localizacoes').select('empresa_id').eq('id', estoque_id).single();
+  const { error } = await sb.from('localizacoes').insert({ empresa_id: estoque.empresa_id, tipo:'endereco', parent_id: estoque_id, codigo });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Endereço cadastrado.</div>';
+  if(!error){ document.getElementById('endereco-codigo').value=''; carregarLocaisConfig(); }
 }
 
 /* --- Usuários (papel + vínculo com empresa) --- */
