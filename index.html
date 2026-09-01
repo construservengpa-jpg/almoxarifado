@@ -520,9 +520,18 @@ async function addLinhaPedidoItem(valores){
     <div class="field"><label>Preço estimado</label><input type="number" step="0.01" class="pedido-preco valor" value="${valores?.preco ?? ''}"></div>
     <button class="link-plain" onclick="this.closest('.item-row').remove()">remover</button>`;
   wrap.appendChild(row);
-  await preencherSelect(selId, 'insumos', 'id', 'descricao', { ativo: true });
-  if(valores?.descricaoSugerida){
-    const sel = document.getElementById(selId);
+  const { data: insumosDisponiveis } = await sb.from('insumos').select('id, codigo_interno, descricao').eq('ativo', true).order('descricao');
+  const sel = document.getElementById(selId);
+  sel.innerHTML = '<option value="">Selecione…</option>' + (insumosDisponiveis||[]).map(i=>`<option value="${i.id}">${i.codigo_interno} — ${i.descricao}</option>`).join('');
+  if(valores?.codigoSugerido){
+    const alvo = valores.codigoSugerido.trim();
+    let achou = false;
+    [...sel.options].forEach(opt=>{ if(opt.text.startsWith(alvo + ' —')) { sel.value = opt.value; achou = true; } });
+    if(!achou && valores?.descricaoSugerida){
+      const alvoDesc = valores.descricaoSugerida.toLowerCase();
+      [...sel.options].forEach(opt=>{ if(opt.text.toLowerCase().includes(alvoDesc)) sel.value = opt.value; });
+    }
+  } else if(valores?.descricaoSugerida){
     const alvo = valores.descricaoSugerida.toLowerCase();
     [...sel.options].forEach(opt=>{ if(opt.text.toLowerCase().includes(alvo)) sel.value = opt.value; });
   }
@@ -578,20 +587,34 @@ async function extrairTextoPdf(file){
 }
 
 function parseLinhasPedido(linhas){
-  // Heurística: procura linhas terminando em "quantidade  valor_unitario" (ou "quantidade valor_unitario valor_total")
-  const regexNumeros = /([\d.,]+)\s+([\d.,]+)(?:\s+([\d.,]+))?\s*$/;
   const itens = [];
+  // Formato Sienge/Starian: "CODIGO - DESCRICAO  QTDE+UNIDADE  PR.UNIT  DESCONTO  %DESC  %IPI  %ACRESC  PRECO_FINAL"
+  // ex: "15110 - MALETA PARA KIT PRIMEIROS SOCORROS 2,0000un 125,0000 0,00 0,00 0,00 0,00 250,00"
+  const RE_SIENGE = /^(\d+)\s*-\s*(.+?)\s+(\d+(?:[.,]\d+)?)\s*([A-Za-zÀ-ÿ²³]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
+  // Fallback genérico: "DESCRICAO  QTDE  VALOR[  VALOR2]" — usado quando o layout não é o do Sienge
+  const RE_GENERICO = /([\d.,]+)\s+([\d.,]+)(?:\s+([\d.,]+))?\s*$/;
+
   linhas.forEach(linha=>{
     const l = linha.trim();
     if(l.length < 5) return;
-    const m = l.match(regexNumeros);
-    if(!m) return;
-    const descricao = l.slice(0, m.index).trim().replace(/\s{2,}/g,' ');
+
+    const m = l.match(RE_SIENGE);
+    if(m){
+      const qtd = parseNumeroBR(m[3]);
+      const valor = parseNumeroBR(m[5]);
+      if(isNaN(qtd) || isNaN(valor) || qtd <= 0) return;
+      itens.push({ codigo: m[1].trim(), descricao: m[2].trim(), quantidade: qtd, unidade: m[4], valor_unitario: valor });
+      return;
+    }
+
+    const m2 = l.match(RE_GENERICO);
+    if(!m2) return;
+    const descricao = l.slice(0, m2.index).trim().replace(/\s{2,}/g,' ');
     if(!descricao || descricao.length < 3) return;
-    const qtd = parseNumeroBR(m[1]);
-    const valor = parseNumeroBR(m[2]);
+    const qtd = parseNumeroBR(m2[1]);
+    const valor = parseNumeroBR(m2[2]);
     if(isNaN(qtd) || isNaN(valor) || qtd <= 0) return;
-    itens.push({ descricao, quantidade: qtd, valor_unitario: valor });
+    itens.push({ codigo: null, descricao, quantidade: qtd, valor_unitario: valor });
   });
   return itens;
 }
@@ -613,7 +636,7 @@ async function processarPdfPedido(ev){
     status.innerHTML = `${itens.length} linha(s) identificada(s). Revise antes de usar — a leitura é heurística e pode errar.`;
     preview.innerHTML = `<label style="font-size:12px;color:var(--text-dim);">Itens extraídos do PDF (revise e ajuste)</label>` +
       itens.map((it,idx)=>`
-        <div class="pdf-preview-row" data-idx="${idx}">
+        <div class="pdf-preview-row" data-idx="${idx}" data-codigo="${(it.codigo||'').replace(/"/g,'&quot;')}">
           <div class="field"><input class="pdf-desc" value="${it.descricao.replace(/"/g,'&quot;')}"></div>
           <div class="field"><input type="number" step="0.0001" class="pdf-qtd" value="${it.quantidade}"></div>
           <div class="field"><input type="number" step="0.01" class="pdf-valor" value="${it.valor_unitario}"></div>
@@ -630,13 +653,14 @@ async function usarItensDoPdf(){
   document.getElementById('pedido-itens').innerHTML = '';
   for(const row of linhas){
     await addLinhaPedidoItem({
+      codigoSugerido: row.dataset.codigo || null,
       descricaoSugerida: row.querySelector('.pdf-desc').value,
       quantidade: row.querySelector('.pdf-qtd').value,
       preco: row.querySelector('.pdf-valor').value
     });
   }
   document.getElementById('pdf-preview').innerHTML = '';
-  document.getElementById('pdf-status').innerHTML = 'Itens transferidos para o formulário abaixo — confira o insumo vinculado em cada linha antes de salvar (a sugestão é por texto e pode não bater com o catálogo).';
+  document.getElementById('pdf-status').innerHTML = 'Itens transferidos para o formulário abaixo — confira o insumo vinculado em cada linha antes de salvar (a sugestão é automática e pode não bater com o catálogo).';
 }
 
 /* ==========================================================================
