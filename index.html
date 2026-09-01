@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <style>
   :root{
     --bg:#1A1D1F; --panel:#24282B; --panel-2:#2C3134; --line:#383D40;
@@ -21,13 +22,11 @@
   a{color:var(--info);}
   #app{display:flex;min-height:100vh;}
 
-  /* ---- Login ---- */
   #login-screen{width:100%;display:flex;align-items:center;justify-content:center;min-height:100vh;}
   .login-box{background:var(--panel);border:1px solid var(--line);padding:36px;width:320px;border-radius:var(--radius);}
   .login-box h1{font-size:22px;margin-bottom:4px;}
   .login-box p{color:var(--text-dim);font-size:13px;margin:0 0 20px;}
 
-  /* ---- Sidebar ---- */
   #sidebar{width:220px;background:var(--panel);border-right:1px solid var(--line);flex-shrink:0;display:flex;flex-direction:column;}
   #sidebar .brand{padding:20px 18px 14px;border-bottom:1px solid var(--line);}
   #sidebar .brand h1{font-size:16px;color:var(--accent);}
@@ -42,7 +41,6 @@
   #sidebar .userbox{padding:14px 18px;border-top:1px solid var(--line);font-size:12px;color:var(--text-dim);}
   #sidebar .userbox button{background:none;border:none;color:var(--info);cursor:pointer;font-size:12px;padding:0;margin-top:4px;}
 
-  /* ---- Main ---- */
   #main{flex:1;padding:28px 34px;overflow-y:auto;height:100vh;}
   .view{display:none;}
   .view.active{display:block;}
@@ -63,12 +61,14 @@
   .badge.pendente{background:#3A3320;color:var(--warn);}
   .badge.processado, .badge.recebida{background:#233A2A;color:var(--ok);}
   .badge.divergente{background:#3A2323;color:var(--danger);}
+  .badge.ok{background:#233A2A;color:var(--ok);}
+  .badge.falta{background:#3A2323;color:var(--danger);}
 
-  /* ---- Modal ---- */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-start;
            justify-content:center;padding:40px 20px;overflow-y:auto;z-index:50;}
   .overlay.open{display:flex;}
   .modal{background:var(--panel);border:1px solid var(--line);width:640px;max-width:100%;padding:26px;border-radius:var(--radius);}
+  .modal.wide{width:820px;}
   .modal h3{font-size:17px;margin-bottom:16px;}
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:5px;}
@@ -85,6 +85,7 @@
   .msg{font-size:12.5px;padding:8px 10px;border-radius:var(--radius);margin-bottom:14px;}
   .msg.error{background:#3A2323;color:#F0908A;}
   .msg.ok{background:#233A2A;color:#8FD1A6;}
+  .msg.warn{background:#3A3320;color:#E8C27A;}
 
   .empty{color:var(--text-dim);font-size:13px;padding:30px;text-align:center;border:1px dashed var(--line);border-radius:var(--radius);}
   .toolbar{display:flex;gap:10px;margin-bottom:16px;}
@@ -95,6 +96,33 @@
   .nota-item-top .desc{color:var(--text);}
   .nota-item-top .valores{color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12px;}
   .nota-item-grid{display:grid;grid-template-columns:2fr 1.4fr auto;gap:8px;align-items:end;}
+
+  /* ---- Início (home) ---- */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
+  .card{background:var(--panel);border:1px solid var(--line);padding:16px;border-radius:var(--radius);}
+  .card .num{font-family:'Oswald',sans-serif;font-size:26px;color:var(--accent);}
+  .card .lbl{font-size:12px;color:var(--text-dim);margin-top:2px;}
+  .checklist{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);}
+  .checklist-item{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);}
+  .checklist-item:last-child{border-bottom:none;}
+  .checklist-item .txt{font-size:13.5px;}
+  .checklist-item .txt .sub{display:block;color:var(--text-dim);font-size:11.5px;margin-top:2px;}
+
+  /* ---- Configurações ---- */
+  .subtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap;}
+  .subtabs button{background:none;border:none;color:var(--text-dim);padding:9px 14px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;}
+  .subtabs button.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .subview{display:none;}
+  .subview.active{display:block;}
+  .inline-form{background:var(--panel);border:1px solid var(--line);padding:16px;border-radius:var(--radius);margin-bottom:18px;}
+  .inline-form .row-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end;margin-bottom:10px;}
+  .chip-select{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip-select label{display:flex;align-items:center;gap:5px;background:var(--panel-2);border:1px solid var(--line);
+     padding:5px 10px;border-radius:20px;font-size:12px;cursor:pointer;}
+
+  /* ---- PDF import ---- */
+  .pdf-drop{border:1px dashed var(--line);border-radius:var(--radius);padding:20px;text-align:center;color:var(--text-dim);margin-bottom:14px;}
+  .pdf-preview-row{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;background:var(--panel-2);padding:8px;border-radius:var(--radius);}
 </style>
 </head>
 <body>
@@ -115,10 +143,12 @@
   <div id="sidebar" style="display:none">
     <div class="brand"><h1>ESTOQUE</h1><span>AMETA Engenharia</span></div>
     <nav>
-      <button data-view="pedidos" class="active">Pedidos de Compra</button>
+      <button data-view="inicio" class="active">Início</button>
+      <button data-view="pedidos">Pedidos de Compra</button>
       <button data-view="notas">Notas Fiscais</button>
       <button data-view="saldo">Saldo de Estoque</button>
       <button data-view="alertas">Alerta de Mínimo</button>
+      <button data-view="config">Configurações</button>
     </nav>
     <div class="userbox">
       <div id="user-nome"></div>
@@ -128,8 +158,16 @@
 
   <div id="main" style="display:none">
 
+    <!-- INÍCIO -->
+    <div class="view active" id="view-inicio">
+      <div class="view-header"><h2>Início</h2></div>
+      <div class="cards" id="inicio-cards"></div>
+      <h3 style="font-size:14px;color:var(--text-dim);margin-bottom:10px;">Configuração do sistema</h3>
+      <div class="checklist" id="inicio-checklist"></div>
+    </div>
+
     <!-- PEDIDOS DE COMPRA -->
-    <div class="view active" id="view-pedidos">
+    <div class="view" id="view-pedidos">
       <div class="view-header">
         <h2>Pedidos de Compra</h2>
         <button class="btn" onclick="abrirModalPedido()">Novo pedido</button>
@@ -149,9 +187,7 @@
     <!-- SALDO -->
     <div class="view" id="view-saldo">
       <div class="view-header"><h2>Saldo de Estoque</h2></div>
-      <div class="toolbar">
-        <input type="text" id="busca-saldo" placeholder="Buscar insumo…" oninput="carregarSaldo()">
-      </div>
+      <div class="toolbar"><input type="text" id="busca-saldo" placeholder="Buscar insumo…" oninput="carregarSaldo()"></div>
       <div id="tabela-saldo"><div class="empty">Carregando…</div></div>
     </div>
 
@@ -161,14 +197,117 @@
       <div id="tabela-alertas"><div class="empty">Carregando…</div></div>
     </div>
 
+    <!-- CONFIGURAÇÕES -->
+    <div class="view" id="view-config">
+      <div class="view-header"><h2>Configurações</h2></div>
+      <div class="subtabs">
+        <button data-sub="empresas" class="active">Empresas</button>
+        <button data-sub="centros">Centros de Custo</button>
+        <button data-sub="fornecedores">Fornecedores</button>
+        <button data-sub="insumos">Insumos</button>
+        <button data-sub="localizacoes">Localizações</button>
+        <button data-sub="usuarios">Usuários</button>
+      </div>
+
+      <div class="subview active" id="sub-empresas">
+        <div class="inline-form">
+          <div id="empresas-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Razão social</label><input id="empresa-razao"></div>
+            <div class="field"><label>CNPJ</label><input id="empresa-cnpj"></div>
+            <div class="field"><label>Nome fantasia</label><input id="empresa-fantasia"></div>
+          </div>
+          <button class="btn small" onclick="salvarEmpresa()">Adicionar empresa</button>
+        </div>
+        <div id="lista-empresas"></div>
+      </div>
+
+      <div class="subview" id="sub-centros">
+        <div class="inline-form">
+          <div id="centros-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Empresa</label><select id="centro-empresa"></select></div>
+            <div class="field"><label>Código</label><input id="centro-codigo"></div>
+            <div class="field"><label>Nome</label><input id="centro-nome"></div>
+          </div>
+          <button class="btn small" onclick="salvarCentro()">Adicionar centro de custo</button>
+        </div>
+        <div id="lista-centros"></div>
+      </div>
+
+      <div class="subview" id="sub-fornecedores">
+        <div class="inline-form">
+          <div id="fornecedores-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Nome</label><input id="fornecedor-nome"></div>
+            <div class="field"><label>CNPJ</label><input id="fornecedor-cnpj"></div>
+            <div class="field"><label>Contato</label><input id="fornecedor-contato"></div>
+          </div>
+          <button class="btn small" onclick="salvarFornecedor()">Adicionar fornecedor</button>
+        </div>
+        <div id="lista-fornecedores"></div>
+      </div>
+
+      <div class="subview" id="sub-insumos">
+        <div class="inline-form">
+          <div id="insumos-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Código interno</label><input id="insumo-codigo"></div>
+            <div class="field"><label>Descrição</label><input id="insumo-descricao"></div>
+            <div class="field"><label>Unidade</label><select id="insumo-unidade"></select></div>
+            <div class="field"><label>Estoque mínimo</label><input type="number" step="0.01" id="insumo-min"></div>
+            <div class="field"><label>Código de barras</label><input id="insumo-barras"></div>
+          </div>
+          <button class="btn small" onclick="salvarInsumo()">Adicionar insumo</button>
+        </div>
+        <div class="toolbar"><input type="text" id="busca-insumo" placeholder="Buscar insumo…" oninput="carregarInsumosConfig()"></div>
+        <div id="lista-insumos"></div>
+      </div>
+
+      <div class="subview" id="sub-localizacoes">
+        <div class="inline-form">
+          <div id="locais-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Empresa</label><select id="local-empresa" onchange="atualizarParentsLocal()"></select></div>
+            <div class="field"><label>Tipo</label>
+              <select id="local-tipo">
+                <option value="galpao">Galpão</option>
+                <option value="rua">Rua</option>
+                <option value="estante">Estante</option>
+                <option value="prateleira">Prateleira</option>
+              </select>
+            </div>
+            <div class="field"><label>Localização superior (opcional)</label><select id="local-parent"><option value="">— nenhuma (nível raiz) —</option></select></div>
+            <div class="field"><label>Código</label><input id="local-codigo" placeholder="Ex: A, 1, D"></div>
+          </div>
+          <button class="btn small" onclick="salvarLocal()">Adicionar localização</button>
+        </div>
+        <div id="lista-locais"></div>
+      </div>
+
+      <div class="subview" id="sub-usuarios">
+        <div class="msg warn">Criar o login (e-mail/senha) ainda precisa ser feito no Supabase Studio → Authentication → Users, por segurança. Aqui você só define o papel e vincula o usuário a uma empresa.</div>
+        <div id="usuarios-msg"></div>
+        <div id="lista-usuarios"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <!-- MODAL: NOVO PEDIDO -->
 <div class="overlay" id="modal-pedido">
-  <div class="modal">
+  <div class="modal wide">
     <h3>Novo pedido de compra</h3>
     <div id="pedido-msg"></div>
+
+    <div class="pdf-drop">
+      <div style="margin-bottom:8px;">Tem o pedido em PDF? Suba aqui pra tentar extrair os itens automaticamente.</div>
+      <input type="file" id="pedido-pdf-input" accept="application/pdf" onchange="processarPdfPedido(event)">
+      <div id="pdf-status" style="margin-top:8px;font-size:12px;color:var(--text-dim);"></div>
+    </div>
+    <div id="pdf-preview"></div>
+
     <div class="row2">
       <div class="field"><label>Centro de custo</label><select id="pedido-cc"></select></div>
       <div class="field"><label>Fornecedor</label><select id="pedido-fornecedor"></select></div>
@@ -222,16 +361,15 @@
 
 <script>
 /* ==========================================================================
-   CONFIGURAÇÃO — preencha com a URL e a anon key do seu Supabase
-   (Studio → Project Settings → API)
+   CONFIGURAÇÃO
    ========================================================================== */
 const SUPABASE_URL = 'https://gjkxtgnodttgegqmdplx.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Hos0QXH6HypSMbCsmXg8cQ_0uFibqmn';
-
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
 let usuarioAtual = null;
-let empresaAtual = null; // assume 1ª empresa vinculada ao usuário; troque por seletor se tiver mais de uma
+let empresaAtual = null;
 
 /* ---------------- AUTENTICAÇÃO ---------------- */
 async function fazerLogin(){
@@ -242,37 +380,50 @@ async function fazerLogin(){
   const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
   if(error){ msg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
   usuarioAtual = data.user;
+  await entrarNoApp();
+}
+
+async function entrarNoApp(){
   await carregarContextoUsuario();
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('sidebar').style.display = 'flex';
   document.getElementById('main').style.display = 'block';
-  carregarPedidos();
+  carregarInicio();
 }
 
-async function fazerLogout(){
-  await sb.auth.signOut();
-  location.reload();
-}
+async function fazerLogout(){ await sb.auth.signOut(); location.reload(); }
 
 async function carregarContextoUsuario(){
   const { data: perfil } = await sb.from('perfis').select('*').eq('id', usuarioAtual.id).single();
   document.getElementById('user-nome').textContent = perfil?.nome || usuarioAtual.email;
-
-  const { data: acessos } = await sb.from('usuario_empresas').select('empresa_id, empresas(razao_social)').eq('usuario_id', usuarioAtual.id);
-  if(acessos && acessos.length){ empresaAtual = acessos[0].empresa_id; }
+  const { data: acessos } = await sb.from('usuario_empresas').select('empresa_id').eq('usuario_id', usuarioAtual.id);
+  if(acessos && acessos.length){ empresaAtual = acessos[0].empresa_id; } else { empresaAtual = null; }
 }
 
-/* ---------------- NAVEGAÇÃO ---------------- */
+/* ---------------- NAVEGAÇÃO PRINCIPAL ---------------- */
 document.querySelectorAll('#sidebar nav button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('#sidebar nav button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.querySelectorAll('#main > .view').forEach(v=>v.classList.remove('active'));
     document.getElementById('view-'+btn.dataset.view).classList.add('active');
-    if(btn.dataset.view==='pedidos') carregarPedidos();
-    if(btn.dataset.view==='notas') carregarNotas();
-    if(btn.dataset.view==='saldo') carregarSaldo();
-    if(btn.dataset.view==='alertas') carregarAlertas();
+    const v = btn.dataset.view;
+    if(v==='inicio') carregarInicio();
+    if(v==='pedidos') carregarPedidos();
+    if(v==='notas') carregarNotas();
+    if(v==='saldo') carregarSaldo();
+    if(v==='alertas') carregarAlertas();
+    if(v==='config') carregarConfigTudo();
+  });
+});
+
+/* ---------------- NAVEGAÇÃO DAS SUB-ABAS DE CONFIGURAÇÕES ---------------- */
+document.querySelectorAll('.subtabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.subtabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
+    document.getElementById('sub-'+btn.dataset.sub).classList.add('active');
   });
 });
 
@@ -280,29 +431,66 @@ function fecharModal(id){ document.getElementById(id).classList.remove('open'); 
 function abrirModal(id){ document.getElementById(id).classList.add('open'); }
 
 /* ==========================================================================
+   INÍCIO — resumo + checklist de configuração
+   ========================================================================== */
+async function carregarInicio(){
+  const cardsBox = document.getElementById('inicio-cards');
+  const checkBox = document.getElementById('inicio-checklist');
+
+  const [{ count: nEmpresas }, { count: nInsumos }, { data: acessos }] = await Promise.all([
+    sb.from('empresas').select('id', { count:'exact', head:true }),
+    sb.from('insumos').select('id', { count:'exact', head:true }),
+    sb.from('usuario_empresas').select('empresa_id').eq('usuario_id', usuarioAtual.id)
+  ]);
+
+  let nPedidos = 0, nNotasPendentes = 0, nAlertas = 0;
+  if(empresaAtual){
+    const r1 = await sb.from('pedidos_compra').select('id',{count:'exact',head:true}).eq('empresa_id', empresaAtual).neq('status','atendido');
+    nPedidos = r1.count || 0;
+    const r2 = await sb.from('notas_fiscais_itens').select('id, notas_fiscais!inner(empresa_id)',{count:'exact',head:true}).eq('processado', false).eq('notas_fiscais.empresa_id', empresaAtual);
+    nNotasPendentes = r2.count || 0;
+    const r3 = await sb.from('vw_alerta_estoque_minimo').select('insumo_id',{count:'exact',head:true});
+    nAlertas = r3.count || 0;
+  }
+
+  cardsBox.innerHTML = `
+    <div class="card"><div class="num">${nPedidos}</div><div class="lbl">Pedidos em aberto</div></div>
+    <div class="card"><div class="num">${nNotasPendentes}</div><div class="lbl">Itens de nota aguardando entrada</div></div>
+    <div class="card"><div class="num">${nAlertas}</div><div class="lbl">Insumos abaixo do mínimo</div></div>
+    <div class="card"><div class="num">${nInsumos||0}</div><div class="lbl">Insumos cadastrados</div></div>`;
+
+  const temEmpresa = (nEmpresas||0) > 0;
+  const temVinculo = acessos && acessos.length > 0;
+  const temInsumo = (nInsumos||0) > 0;
+
+  checkBox.innerHTML = `
+    ${itemChecklist(temEmpresa, 'Cadastrar ao menos uma empresa', 'Configurações → Empresas')}
+    ${itemChecklist(temVinculo, 'Vincular seu usuário a uma empresa', 'Configurações → Usuários')}
+    ${itemChecklist(temInsumo, 'Cadastrar os insumos usados no estoque', 'Configurações → Insumos')}
+  `;
+}
+
+function itemChecklist(ok, texto, onde){
+  return `<div class="checklist-item">
+    <div class="txt">${texto}<span class="sub">${onde}</span></div>
+    <span class="badge ${ok?'ok':'falta'}">${ok?'Concluído':'Pendente'}</span>
+  </div>`;
+}
+
+/* ==========================================================================
    PEDIDOS DE COMPRA
    ========================================================================== */
 async function carregarPedidos(){
   const box = document.getElementById('tabela-pedidos');
-  if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa. Peça ao administrador para cadastrar um vínculo em usuario_empresas.</div>'; return; }
+  if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa. Vá em Configurações → Usuários.</div>'; return; }
   const { data, error } = await sb.from('pedidos_compra')
     .select('id, numero, status, data_pedido, fornecedores(nome), centros_custo(nome)')
-    .eq('empresa_id', empresaAtual)
-    .order('data_pedido', { ascending:false });
-
+    .eq('empresa_id', empresaAtual).order('data_pedido', { ascending:false });
   if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
   if(!data.length){ box.innerHTML = '<div class="empty">Nenhum pedido cadastrado ainda.</div>'; return; }
-
-  box.innerHTML = `<table><thead><tr>
-    <th>Número</th><th>Fornecedor</th><th>Centro de custo</th><th>Data</th><th>Status</th>
-  </tr></thead><tbody>${data.map(p=>`
-    <tr>
-      <td class="mono">${p.numero}</td>
-      <td>${p.fornecedores?.nome || '—'}</td>
-      <td>${p.centros_custo?.nome || '—'}</td>
-      <td class="mono">${p.data_pedido}</td>
-      <td><span class="badge ${p.status}">${p.status}</span></td>
-    </tr>`).join('')}</tbody></table>`;
+  box.innerHTML = `<table><thead><tr><th>Número</th><th>Fornecedor</th><th>Centro de custo</th><th>Data</th><th>Status</th></tr></thead><tbody>${data.map(p=>`
+    <tr><td class="mono">${p.numero}</td><td>${p.fornecedores?.nome || '—'}</td><td>${p.centros_custo?.nome || '—'}</td>
+    <td class="mono">${p.data_pedido}</td><td><span class="badge ${p.status}">${p.status}</span></td></tr>`).join('')}</tbody></table>`;
 }
 
 async function abrirModalPedido(){
@@ -311,22 +499,30 @@ async function abrirModalPedido(){
   document.getElementById('pedido-numero').value = '';
   document.getElementById('pedido-itens').innerHTML = '';
   document.getElementById('pedido-msg').innerHTML = '';
+  document.getElementById('pdf-preview').innerHTML = '';
+  document.getElementById('pdf-status').innerHTML = '';
+  document.getElementById('pedido-pdf-input').value = '';
   addLinhaPedidoItem();
   abrirModal('modal-pedido');
 }
 
-async function addLinhaPedidoItem(){
+async function addLinhaPedidoItem(valores){
   const wrap = document.getElementById('pedido-itens');
   const row = document.createElement('div');
   row.className = 'item-row';
   const selId = 'insumo-sel-'+Date.now()+Math.random().toString(36).slice(2,6);
   row.innerHTML = `
     <div class="field"><label>Insumo</label><select id="${selId}" class="pedido-insumo"></select></div>
-    <div class="field"><label>Quantidade</label><input type="number" step="0.0001" class="pedido-qtd qtd"></div>
-    <div class="field"><label>Preço estimado</label><input type="number" step="0.01" class="pedido-preco valor"></div>
+    <div class="field"><label>Quantidade</label><input type="number" step="0.0001" class="pedido-qtd qtd" value="${valores?.quantidade ?? ''}"></div>
+    <div class="field"><label>Preço estimado</label><input type="number" step="0.01" class="pedido-preco valor" value="${valores?.preco ?? ''}"></div>
     <button class="link-plain" onclick="this.closest('.item-row').remove()">remover</button>`;
   wrap.appendChild(row);
   await preencherSelect(selId, 'insumos', 'id', 'descricao', { ativo: true });
+  if(valores?.descricaoSugerida){
+    const sel = document.getElementById(selId);
+    const alvo = valores.descricaoSugerida.toLowerCase();
+    [...sel.options].forEach(opt=>{ if(opt.text.toLowerCase().includes(alvo)) sel.value = opt.value; });
+  }
 }
 
 async function salvarPedido(){
@@ -335,55 +531,127 @@ async function salvarPedido(){
   const fornecedor_id = document.getElementById('pedido-fornecedor').value;
   const numero = document.getElementById('pedido-numero').value.trim();
   if(!numero || !centro_custo_id){ msg.innerHTML = '<div class="msg error">Preencha centro de custo e número do pedido.</div>'; return; }
-
   const linhas = [...document.querySelectorAll('#pedido-itens .item-row')].map(row=>({
     insumo_id: row.querySelector('.pedido-insumo').value,
     quantidade: parseFloat(row.querySelector('.pedido-qtd').value),
     preco_estimado: parseFloat(row.querySelector('.pedido-preco').value) || null
   })).filter(i=>i.insumo_id && i.quantidade > 0);
-
-  if(!linhas.length){ msg.innerHTML = '<div class="msg error">Adicione ao menos um item válido.</div>'; return; }
-
+  if(!linhas.length){ msg.innerHTML = '<div class="msg error">Adicione ao menos um item válido (verifique se o insumo foi selecionado).</div>'; return; }
   const { data: pedido, error } = await sb.from('pedidos_compra').insert({
     empresa_id: empresaAtual, centro_custo_id, fornecedor_id: fornecedor_id || null,
     numero, solicitante_id: usuarioAtual.id, status: 'enviado'
   }).select().single();
-
   if(error){ msg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
-
   const itens = linhas.map(l=>({ ...l, pedido_id: pedido.id }));
   const { error: errItens } = await sb.from('pedidos_compra_itens').insert(itens);
   if(errItens){ msg.innerHTML = `<div class="msg error">${errItens.message}</div>`; return; }
-
   fecharModal('modal-pedido');
   carregarPedidos();
 }
 
+/* ---------------- IMPORTAÇÃO DE PDF NO PEDIDO ---------------- */
+function parseNumeroBR(str){
+  if(!str) return NaN;
+  let s = str.trim().replace(/\./g,'').replace(',', '.');
+  return parseFloat(s);
+}
+
+async function extrairTextoPdf(file){
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  let linhas = [];
+  for(let p=1; p<=pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    // agrupa por posição Y aproximada pra reconstituir linhas
+    const porLinha = {};
+    content.items.forEach(it=>{
+      const y = Math.round(it.transform[5]);
+      porLinha[y] = (porLinha[y] || '') + it.str;
+    });
+    Object.keys(porLinha).sort((a,b)=>b-a).forEach(y=> linhas.push(porLinha[y]));
+  }
+  return linhas;
+}
+
+function parseLinhasPedido(linhas){
+  // Heurística: procura linhas terminando em "quantidade  valor_unitario" (ou "quantidade valor_unitario valor_total")
+  const regexNumeros = /([\d.,]+)\s+([\d.,]+)(?:\s+([\d.,]+))?\s*$/;
+  const itens = [];
+  linhas.forEach(linha=>{
+    const l = linha.trim();
+    if(l.length < 5) return;
+    const m = l.match(regexNumeros);
+    if(!m) return;
+    const descricao = l.slice(0, m.index).trim().replace(/\s{2,}/g,' ');
+    if(!descricao || descricao.length < 3) return;
+    const qtd = parseNumeroBR(m[1]);
+    const valor = parseNumeroBR(m[2]);
+    if(isNaN(qtd) || isNaN(valor) || qtd <= 0) return;
+    itens.push({ descricao, quantidade: qtd, valor_unitario: valor });
+  });
+  return itens;
+}
+
+async function processarPdfPedido(ev){
+  const file = ev.target.files[0];
+  const status = document.getElementById('pdf-status');
+  const preview = document.getElementById('pdf-preview');
+  if(!file) return;
+  status.textContent = 'Lendo PDF…';
+  preview.innerHTML = '';
+  try{
+    const linhas = await extrairTextoPdf(file);
+    const itens = parseLinhasPedido(linhas);
+    if(!itens.length){
+      status.innerHTML = 'Não consegui separar itens automaticamente neste PDF — adicione manualmente abaixo, ou copie o texto do PDF e ajuste.';
+      return;
+    }
+    status.innerHTML = `${itens.length} linha(s) identificada(s). Revise antes de usar — a leitura é heurística e pode errar.`;
+    preview.innerHTML = `<label style="font-size:12px;color:var(--text-dim);">Itens extraídos do PDF (revise e ajuste)</label>` +
+      itens.map((it,idx)=>`
+        <div class="pdf-preview-row" data-idx="${idx}">
+          <div class="field"><input class="pdf-desc" value="${it.descricao.replace(/"/g,'&quot;')}"></div>
+          <div class="field"><input type="number" step="0.0001" class="pdf-qtd" value="${it.quantidade}"></div>
+          <div class="field"><input type="number" step="0.01" class="pdf-valor" value="${it.valor_unitario}"></div>
+          <button class="link-plain" onclick="this.closest('.pdf-preview-row').remove()">descartar</button>
+        </div>`).join('') +
+      `<button class="btn small secondary" onclick="usarItensDoPdf()">Usar estes itens no pedido</button>`;
+  }catch(e){
+    status.innerHTML = `<span style="color:var(--danger)">Erro ao ler o PDF: ${e.message}</span>`;
+  }
+}
+
+async function usarItensDoPdf(){
+  const linhas = [...document.querySelectorAll('.pdf-preview-row')];
+  document.getElementById('pedido-itens').innerHTML = '';
+  for(const row of linhas){
+    await addLinhaPedidoItem({
+      descricaoSugerida: row.querySelector('.pdf-desc').value,
+      quantidade: row.querySelector('.pdf-qtd').value,
+      preco: row.querySelector('.pdf-valor').value
+    });
+  }
+  document.getElementById('pdf-preview').innerHTML = '';
+  document.getElementById('pdf-status').innerHTML = 'Itens transferidos para o formulário abaixo — confira o insumo vinculado em cada linha antes de salvar (a sugestão é por texto e pode não bater com o catálogo).';
+}
+
 /* ==========================================================================
-   NOTAS FISCAIS
+   NOTAS FISCAIS (mesma lógica da versão anterior)
    ========================================================================== */
 async function carregarNotas(){
   const box = document.getElementById('tabela-notas');
-  if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa. Peça ao administrador para cadastrar um vínculo em usuario_empresas.</div>'; return; }
+  if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa. Vá em Configurações → Usuários.</div>'; return; }
   const { data, error } = await sb.from('notas_fiscais')
     .select('id, numero, serie, status, data_recebimento, valor_total, fornecedores(nome)')
-    .eq('empresa_id', empresaAtual)
-    .order('criado_em', { ascending:false });
-
+    .eq('empresa_id', empresaAtual).order('criado_em', { ascending:false });
   if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
   if(!data.length){ box.innerHTML = '<div class="empty">Nenhuma nota fiscal lançada ainda.</div>'; return; }
-
-  box.innerHTML = `<table><thead><tr>
-    <th>Número/Série</th><th>Fornecedor</th><th>Recebimento</th><th>Valor</th><th>Status</th><th></th>
-  </tr></thead><tbody>${data.map(n=>`
-    <tr>
-      <td class="mono">${n.numero}${n.serie ? '/'+n.serie : ''}</td>
-      <td>${n.fornecedores?.nome || '—'}</td>
-      <td class="mono">${n.data_recebimento || '—'}</td>
-      <td class="mono">${n.valor_total ? 'R$ '+Number(n.valor_total).toFixed(2) : '—'}</td>
-      <td><span class="badge ${n.status}">${n.status}</span></td>
-      <td><button class="btn small secondary" onclick="abrirDetalheNota('${n.id}')">Vincular / Processar</button></td>
-    </tr>`).join('')}</tbody></table>`;
+  box.innerHTML = `<table><thead><tr><th>Número/Série</th><th>Fornecedor</th><th>Recebimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>${data.map(n=>`
+    <tr><td class="mono">${n.numero}${n.serie ? '/'+n.serie : ''}</td><td>${n.fornecedores?.nome || '—'}</td>
+    <td class="mono">${n.data_recebimento || '—'}</td><td class="mono">${n.valor_total ? 'R$ '+Number(n.valor_total).toFixed(2) : '—'}</td>
+    <td><span class="badge ${n.status}">${n.status}</span></td>
+    <td><button class="btn small secondary" onclick="abrirDetalheNota('${n.id}')">Vincular / Processar</button></td></tr>`).join('')}</tbody></table>`;
 }
 
 async function abrirModalNota(){
@@ -417,44 +685,33 @@ async function salvarNota(){
   const serie = document.getElementById('nota-serie').value.trim() || null;
   const data_emissao = document.getElementById('nota-emissao').value || null;
   const data_recebimento = document.getElementById('nota-recebimento').value || null;
-
   if(!numero){ msg.innerHTML = '<div class="msg error">Informe o número da nota.</div>'; return; }
-
   const linhas = [...document.querySelectorAll('#nota-itens .item-row')].map(row=>({
     descricao_fornecedor: row.querySelector('.nota-desc').value.trim(),
     quantidade: parseFloat(row.querySelector('.nota-qtd').value),
     valor_unitario: parseFloat(row.querySelector('.nota-valor').value)
   })).filter(i=>i.descricao_fornecedor && i.quantidade > 0 && i.valor_unitario >= 0);
-
   if(!linhas.length){ msg.innerHTML = '<div class="msg error">Adicione ao menos um item válido.</div>'; return; }
-
   const valor_total = linhas.reduce((s,l)=>s + l.quantidade*l.valor_unitario, 0);
-
   const { data: nota, error } = await sb.from('notas_fiscais').insert({
     empresa_id: empresaAtual, fornecedor_id: fornecedor_id || null, numero, serie,
     data_emissao, data_recebimento, valor_total, status: 'lancada'
   }).select().single();
-
   if(error){ msg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
-
   const itens = linhas.map(l=>({ ...l, nota_id: nota.id }));
   const { error: errItens } = await sb.from('notas_fiscais_itens').insert(itens);
   if(errItens){ msg.innerHTML = `<div class="msg error">${errItens.message}</div>`; return; }
-
   fecharModal('modal-nota');
   carregarNotas();
 }
 
-/* ---------------- DETALHE DA NOTA: vínculo + processamento de entrada ---------------- */
 async function abrirDetalheNota(notaId){
   document.getElementById('detalhe-nota-msg').innerHTML = '';
   const { data: nota } = await sb.from('notas_fiscais').select('*, fornecedores(nome)').eq('id', notaId).single();
   document.getElementById('detalhe-nota-titulo').textContent = `Nota ${nota.numero}${nota.serie ? '/'+nota.serie : ''} — ${nota.fornecedores?.nome || ''}`;
-
   const { data: itens } = await sb.from('notas_fiscais_itens').select('*').eq('nota_id', notaId);
   const { data: insumos } = await sb.from('insumos').select('id, descricao, codigo_interno').eq('ativo', true).order('descricao');
   const { data: locais } = await sb.from('localizacoes_caminho').select('id, caminho').eq('empresa_id', empresaAtual);
-
   const box = document.getElementById('detalhe-nota-itens');
   box.innerHTML = itens.map(item => renderNotaItemBlock(item, insumos, locais, nota.fornecedor_id)).join('');
   abrirModal('modal-detalhe-nota');
@@ -473,12 +730,8 @@ function renderNotaItemBlock(item, insumos, locais, fornecedor_id){
       ${processado
         ? `<span class="badge processado">Entrada processada no estoque</span>`
         : `<div class="nota-item-grid">
-            <div class="field"><label>Vincular ao insumo</label>
-              <select class="vinc-insumo"><option value="">Selecione…</option>${insumoOptions}</select>
-            </div>
-            <div class="field"><label>Localização de destino</label>
-              <select class="vinc-local"><option value="">Selecione…</option>${localOptions}</select>
-            </div>
+            <div class="field"><label>Vincular ao insumo</label><select class="vinc-insumo"><option value="">Selecione…</option>${insumoOptions}</select></div>
+            <div class="field"><label>Localização de destino</label><select class="vinc-local"><option value="">Selecione…</option>${localOptions}</select></div>
             <button class="btn small" onclick="processarEntradaItem('${item.id}', this)">Processar entrada</button>
           </div>`
       }
@@ -491,110 +744,223 @@ async function processarEntradaItem(itemId, btn){
   const localizacao_destino_id = bloco.querySelector('.vinc-local').value;
   const fornecedor_id = bloco.dataset.fornecedorId || null;
   const msg = document.getElementById('detalhe-nota-msg');
-
-  if(!insumo_id || !localizacao_destino_id){
-    msg.innerHTML = '<div class="msg error">Selecione o insumo e a localização de destino antes de processar.</div>';
-    return;
-  }
-
+  if(!insumo_id || !localizacao_destino_id){ msg.innerHTML = '<div class="msg error">Selecione o insumo e a localização de destino antes de processar.</div>'; return; }
   btn.disabled = true; btn.textContent = 'Processando…';
-
-  // 1. Grava o vínculo do item da nota (insumo + localização)
-  const { data: item, error: errUpd } = await sb.from('notas_fiscais_itens')
-    .update({ insumo_id, localizacao_destino_id })
-    .eq('id', itemId).select().single();
-
+  const { data: item, error: errUpd } = await sb.from('notas_fiscais_itens').update({ insumo_id, localizacao_destino_id }).eq('id', itemId).select().single();
   if(errUpd){ msg.innerHTML = `<div class="msg error">${errUpd.message}</div>`; btn.disabled=false; return; }
-
-  // 2. Memoriza o de-para fornecedor -> insumo para sugestão automática futura
   if(fornecedor_id){
-    await sb.from('vinculo_insumo_fornecedor').upsert({
-      fornecedor_id, descricao_fornecedor: item.descricao_fornecedor, insumo_id
-    }, { onConflict: 'fornecedor_id,descricao_fornecedor' });
+    await sb.from('vinculo_insumo_fornecedor').upsert({ fornecedor_id, descricao_fornecedor: item.descricao_fornecedor, insumo_id }, { onConflict: 'fornecedor_id,descricao_fornecedor' });
   }
-
-  // 3. Chama a função de negócio que gera a entrada de estoque + custo médio
-  const { error: errRpc } = await sb.rpc('fn_processar_entrada_nota', {
-    p_nota_item_id: itemId, p_usuario_id: usuarioAtual.id
-  });
-
+  const { error: errRpc } = await sb.rpc('fn_processar_entrada_nota', { p_nota_item_id: itemId, p_usuario_id: usuarioAtual.id });
   if(errRpc){ msg.innerHTML = `<div class="msg error">${errRpc.message}</div>`; btn.disabled=false; btn.textContent='Processar entrada'; return; }
-
-  bloco.innerHTML = `
-    <div class="nota-item-top">
-      <span class="desc">${item.descricao_fornecedor}</span>
-      <span class="valores">${item.quantidade} × R$ ${Number(item.valor_unitario).toFixed(4)}</span>
-    </div>
+  bloco.innerHTML = `<div class="nota-item-top"><span class="desc">${item.descricao_fornecedor}</span>
+    <span class="valores">${item.quantidade} × R$ ${Number(item.valor_unitario).toFixed(4)}</span></div>
     <span class="badge processado">Entrada processada no estoque</span>`;
-
   carregarNotas();
 }
 
 /* ==========================================================================
-   SALDO DE ESTOQUE
+   SALDO / ALERTAS
    ========================================================================== */
 async function carregarSaldo(){
   const box = document.getElementById('tabela-saldo');
   if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa.</div>'; return; }
   const busca = document.getElementById('busca-saldo')?.value?.trim() || '';
-
-  let query = sb.from('estoque_saldos')
+  const { data, error } = await sb.from('estoque_saldos')
     .select('quantidade, insumos(codigo_interno, descricao, custo_medio, unidades_medida(sigla)), localizacoes_caminho(caminho)')
-    .eq('empresa_id', empresaAtual)
-    .gt('quantidade', 0);
-
-  const { data, error } = await query;
+    .eq('empresa_id', empresaAtual).gt('quantidade', 0);
   if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
-
   let linhas = data || [];
-  if(busca){
-    linhas = linhas.filter(l => l.insumos?.descricao?.toLowerCase().includes(busca.toLowerCase())
-                              || l.insumos?.codigo_interno?.toLowerCase().includes(busca.toLowerCase()));
-  }
-
+  if(busca){ linhas = linhas.filter(l => l.insumos?.descricao?.toLowerCase().includes(busca.toLowerCase()) || l.insumos?.codigo_interno?.toLowerCase().includes(busca.toLowerCase())); }
   if(!linhas.length){ box.innerHTML = '<div class="empty">Nenhum saldo encontrado.</div>'; return; }
-
-  box.innerHTML = `<table><thead><tr>
-    <th>Código</th><th>Insumo</th><th>Localização</th><th>Quantidade</th><th>Custo médio</th><th>Valor total</th>
-  </tr></thead><tbody>${linhas.map(l=>`
-    <tr>
-      <td class="mono">${l.insumos?.codigo_interno || '—'}</td>
-      <td>${l.insumos?.descricao || '—'}</td>
-      <td>${l.localizacoes_caminho?.caminho || '—'}</td>
-      <td class="mono">${Number(l.quantidade).toFixed(2)} ${l.insumos?.unidades_medida?.sigla || ''}</td>
-      <td class="mono">R$ ${Number(l.insumos?.custo_medio || 0).toFixed(4)}</td>
-      <td class="mono">R$ ${(l.quantidade * (l.insumos?.custo_medio || 0)).toFixed(2)}</td>
-    </tr>`).join('')}</tbody></table>`;
+  box.innerHTML = `<table><thead><tr><th>Código</th><th>Insumo</th><th>Localização</th><th>Quantidade</th><th>Custo médio</th><th>Valor total</th></tr></thead><tbody>${linhas.map(l=>`
+    <tr><td class="mono">${l.insumos?.codigo_interno || '—'}</td><td>${l.insumos?.descricao || '—'}</td><td>${l.localizacoes_caminho?.caminho || '—'}</td>
+    <td class="mono">${Number(l.quantidade).toFixed(2)} ${l.insumos?.unidades_medida?.sigla || ''}</td>
+    <td class="mono">R$ ${Number(l.insumos?.custo_medio || 0).toFixed(4)}</td>
+    <td class="mono">R$ ${(l.quantidade * (l.insumos?.custo_medio || 0)).toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
 }
 
-/* ==========================================================================
-   ALERTA DE ESTOQUE MÍNIMO
-   ========================================================================== */
 async function carregarAlertas(){
   const box = document.getElementById('tabela-alertas');
   const { data, error } = await sb.from('vw_alerta_estoque_minimo').select('*');
   if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
   if(!data.length){ box.innerHTML = '<div class="empty">Nenhum insumo abaixo do estoque mínimo. 👍</div>'; return; }
-
-  box.innerHTML = `<table><thead><tr>
-    <th>Código</th><th>Insumo</th><th>Saldo atual</th><th>Estoque mínimo</th>
-  </tr></thead><tbody>${data.map(a=>`
-    <tr>
-      <td class="mono">${a.codigo_interno}</td>
-      <td>${a.descricao}</td>
-      <td class="mono" style="color:var(--danger)">${Number(a.saldo_total).toFixed(2)}</td>
-      <td class="mono">${Number(a.estoque_minimo).toFixed(2)}</td>
-    </tr>`).join('')}</tbody></table>`;
+  box.innerHTML = `<table><thead><tr><th>Código</th><th>Insumo</th><th>Saldo atual</th><th>Estoque mínimo</th></tr></thead><tbody>${data.map(a=>`
+    <tr><td class="mono">${a.codigo_interno}</td><td>${a.descricao}</td>
+    <td class="mono" style="color:var(--danger)">${Number(a.saldo_total).toFixed(2)}</td><td class="mono">${Number(a.estoque_minimo).toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 /* ==========================================================================
-   HELPER: preenche <select> a partir de uma tabela
+   CONFIGURAÇÕES — cadastros e vínculos
    ========================================================================== */
+async function carregarConfigTudo(){
+  await Promise.all([
+    carregarEmpresasConfig(), carregarCentrosConfig(), carregarFornecedoresConfig(),
+    carregarInsumosConfig(), preencherSelectsLocaisConfig(), carregarLocaisConfig(), carregarUsuariosConfig()
+  ]);
+}
+
+/* --- Empresas --- */
+async function carregarEmpresasConfig(){
+  const { data } = await sb.from('empresas').select('*').order('razao_social');
+  document.getElementById('lista-empresas').innerHTML = renderTabelaSimples(data, [
+    { campo:'razao_social', titulo:'Razão social' }, { campo:'cnpj', titulo:'CNPJ' }, { campo:'nome_fantasia', titulo:'Fantasia' }
+  ], 'Nenhuma empresa cadastrada.');
+}
+async function salvarEmpresa(){
+  const msg = document.getElementById('empresas-msg');
+  const razao_social = document.getElementById('empresa-razao').value.trim();
+  const cnpj = document.getElementById('empresa-cnpj').value.trim();
+  const nome_fantasia = document.getElementById('empresa-fantasia').value.trim() || null;
+  if(!razao_social || !cnpj){ msg.innerHTML = '<div class="msg error">Preencha razão social e CNPJ.</div>'; return; }
+  const { error } = await sb.from('empresas').insert({ razao_social, cnpj, nome_fantasia });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Empresa cadastrada.</div>';
+  if(!error){ document.getElementById('empresa-razao').value=''; document.getElementById('empresa-cnpj').value=''; document.getElementById('empresa-fantasia').value=''; carregarEmpresasConfig(); }
+}
+
+/* --- Centros de custo --- */
+async function carregarCentrosConfig(){
+  await preencherSelect('centro-empresa', 'empresas', 'id', 'razao_social');
+  const { data } = await sb.from('centros_custo').select('codigo, nome, empresas(razao_social)').order('codigo');
+  document.getElementById('lista-centros').innerHTML = renderTabelaSimples(data?.map(c=>({codigo:c.codigo, nome:c.nome, empresa:c.empresas?.razao_social})), [
+    { campo:'codigo', titulo:'Código' }, { campo:'nome', titulo:'Nome' }, { campo:'empresa', titulo:'Empresa' }
+  ], 'Nenhum centro de custo cadastrado.');
+}
+async function salvarCentro(){
+  const msg = document.getElementById('centros-msg');
+  const empresa_id = document.getElementById('centro-empresa').value;
+  const codigo = document.getElementById('centro-codigo').value.trim();
+  const nome = document.getElementById('centro-nome').value.trim();
+  if(!empresa_id || !codigo || !nome){ msg.innerHTML = '<div class="msg error">Preencha todos os campos.</div>'; return; }
+  const { error } = await sb.from('centros_custo').insert({ empresa_id, codigo, nome });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Centro de custo cadastrado.</div>';
+  if(!error){ document.getElementById('centro-codigo').value=''; document.getElementById('centro-nome').value=''; carregarCentrosConfig(); }
+}
+
+/* --- Fornecedores --- */
+async function carregarFornecedoresConfig(){
+  const { data } = await sb.from('fornecedores').select('*').order('nome');
+  document.getElementById('lista-fornecedores').innerHTML = renderTabelaSimples(data, [
+    { campo:'nome', titulo:'Nome' }, { campo:'cnpj', titulo:'CNPJ' }, { campo:'contato', titulo:'Contato' }
+  ], 'Nenhum fornecedor cadastrado.');
+}
+async function salvarFornecedor(){
+  const msg = document.getElementById('fornecedores-msg');
+  const nome = document.getElementById('fornecedor-nome').value.trim();
+  const cnpj = document.getElementById('fornecedor-cnpj').value.trim() || null;
+  const contato = document.getElementById('fornecedor-contato').value.trim() || null;
+  if(!nome){ msg.innerHTML = '<div class="msg error">Informe o nome do fornecedor.</div>'; return; }
+  const { error } = await sb.from('fornecedores').insert({ nome, cnpj, contato });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Fornecedor cadastrado.</div>';
+  if(!error){ document.getElementById('fornecedor-nome').value=''; document.getElementById('fornecedor-cnpj').value=''; document.getElementById('fornecedor-contato').value=''; carregarFornecedoresConfig(); }
+}
+
+/* --- Insumos --- */
+async function carregarInsumosConfig(){
+  await preencherSelect('insumo-unidade', 'unidades_medida', 'id', 'sigla');
+  const busca = document.getElementById('busca-insumo')?.value?.trim() || '';
+  let q = sb.from('insumos').select('codigo_interno, descricao, estoque_minimo, codigo_barras, unidades_medida(sigla)').order('descricao');
+  const { data } = await q;
+  let linhas = data || [];
+  if(busca) linhas = linhas.filter(i=> i.descricao.toLowerCase().includes(busca.toLowerCase()) || i.codigo_interno.toLowerCase().includes(busca.toLowerCase()));
+  document.getElementById('lista-insumos').innerHTML = renderTabelaSimples(linhas.map(i=>({
+    codigo: i.codigo_interno, descricao: i.descricao, unidade: i.unidades_medida?.sigla, minimo: i.estoque_minimo
+  })), [
+    { campo:'codigo', titulo:'Código' }, { campo:'descricao', titulo:'Descrição' }, { campo:'unidade', titulo:'Unidade' }, { campo:'minimo', titulo:'Estoque mínimo' }
+  ], 'Nenhum insumo cadastrado.');
+}
+async function salvarInsumo(){
+  const msg = document.getElementById('insumos-msg');
+  const codigo_interno = document.getElementById('insumo-codigo').value.trim();
+  const descricao = document.getElementById('insumo-descricao').value.trim();
+  const unidade_id = document.getElementById('insumo-unidade').value;
+  const estoque_minimo = parseFloat(document.getElementById('insumo-min').value) || 0;
+  const codigo_barras = document.getElementById('insumo-barras').value.trim() || null;
+  if(!codigo_interno || !descricao || !unidade_id){ msg.innerHTML = '<div class="msg error">Preencha código interno, descrição e unidade.</div>'; return; }
+  const { error } = await sb.from('insumos').insert({ codigo_interno, descricao, unidade_id, estoque_minimo, codigo_barras });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Insumo cadastrado.</div>';
+  if(!error){ ['insumo-codigo','insumo-descricao','insumo-min','insumo-barras'].forEach(id=>document.getElementById(id).value=''); carregarInsumosConfig(); }
+}
+
+/* --- Localizações --- */
+async function preencherSelectsLocaisConfig(){ await preencherSelect('local-empresa', 'empresas', 'id', 'razao_social'); await atualizarParentsLocal(); }
+async function atualizarParentsLocal(){
+  const empresa_id = document.getElementById('local-empresa').value;
+  const sel = document.getElementById('local-parent');
+  sel.innerHTML = '<option value="">— nenhuma (nível raiz) —</option>';
+  if(!empresa_id) return;
+  const { data } = await sb.from('localizacoes_caminho').select('id, caminho').eq('empresa_id', empresa_id);
+  (data||[]).forEach(l=> sel.innerHTML += `<option value="${l.id}">${l.caminho}</option>`);
+}
+async function carregarLocaisConfig(){
+  const { data } = await sb.from('localizacoes_caminho').select('caminho, tipo, empresa_id, empresas(razao_social)').order('caminho');
+  document.getElementById('lista-locais').innerHTML = renderTabelaSimples(data?.map(l=>({
+    caminho: l.caminho, tipo: l.tipo, empresa: l.empresas?.razao_social
+  })), [ { campo:'caminho', titulo:'Localização' }, { campo:'tipo', titulo:'Tipo' }, { campo:'empresa', titulo:'Empresa' } ], 'Nenhuma localização cadastrada.');
+}
+async function salvarLocal(){
+  const msg = document.getElementById('locais-msg');
+  const empresa_id = document.getElementById('local-empresa').value;
+  const tipo = document.getElementById('local-tipo').value;
+  const parent_id = document.getElementById('local-parent').value || null;
+  const codigo = document.getElementById('local-codigo').value.trim();
+  if(!empresa_id || !codigo){ msg.innerHTML = '<div class="msg error">Selecione a empresa e informe o código.</div>'; return; }
+  const { error } = await sb.from('localizacoes').insert({ empresa_id, tipo, parent_id, codigo });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Localização cadastrada.</div>';
+  if(!error){ document.getElementById('local-codigo').value=''; carregarLocaisConfig(); atualizarParentsLocal(); }
+}
+
+/* --- Usuários (papel + vínculo com empresa) --- */
+async function carregarUsuariosConfig(){
+  const { data: perfis } = await sb.from('perfis').select('*').order('nome');
+  const { data: empresas } = await sb.from('empresas').select('id, razao_social');
+  const { data: vinculos } = await sb.from('usuario_empresas').select('usuario_id, empresa_id');
+  const box = document.getElementById('lista-usuarios');
+  if(!perfis || !perfis.length){ box.innerHTML = '<div class="empty">Nenhum perfil encontrado. Crie o login no Studio e depois volte aqui.</div>'; return; }
+  box.innerHTML = perfis.map(p=>{
+    const vinculadosIds = (vinculos||[]).filter(v=>v.usuario_id===p.id).map(v=>v.empresa_id);
+    const chips = (empresas||[]).map(e=>`
+      <label><input type="checkbox" data-user="${p.id}" data-empresa="${e.id}" ${vinculadosIds.includes(e.id)?'checked':''} onchange="alternarVinculoEmpresa(this)"> ${e.razao_social}</label>`).join('');
+    return `<div class="inline-form">
+      <div class="row-fields">
+        <div class="field"><label>Nome</label><input value="${p.nome}" disabled></div>
+        <div class="field"><label>Papel</label>
+          <select onchange="atualizarPapel('${p.id}', this.value)">
+            ${['admin','gestor','almoxarife','requisitante'].map(op=>`<option value="${op}" ${p.papel===op?'selected':''}>${op}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px;">Empresas vinculadas</label>
+      <div class="chip-select">${chips || '<span style="color:var(--text-dim);font-size:12px;">Nenhuma empresa cadastrada ainda.</span>'}</div>
+    </div>`;
+  }).join('');
+}
+async function atualizarPapel(usuarioId, papel){
+  await sb.from('perfis').update({ papel }).eq('id', usuarioId);
+  document.getElementById('usuarios-msg').innerHTML = '<div class="msg ok">Papel atualizado.</div>';
+}
+async function alternarVinculoEmpresa(chk){
+  const usuario_id = chk.dataset.user, empresa_id = chk.dataset.empresa;
+  if(chk.checked){ await sb.from('usuario_empresas').insert({ usuario_id, empresa_id }); }
+  else { await sb.from('usuario_empresas').delete().eq('usuario_id', usuario_id).eq('empresa_id', empresa_id); }
+  document.getElementById('usuarios-msg').innerHTML = '<div class="msg ok">Vínculo atualizado. Se foi você mesmo, saia e entre de novo para aplicar.</div>';
+}
+
+/* ==========================================================================
+   HELPERS
+   ========================================================================== */
+function renderTabelaSimples(linhas, colunas, vazio){
+  if(!linhas || !linhas.length) return `<div class="empty">${vazio}</div>`;
+  return `<table><thead><tr>${colunas.map(c=>`<th>${c.titulo}</th>`).join('')}</tr></thead><tbody>${linhas.map(l=>`
+    <tr>${colunas.map(c=>`<td>${l[c.campo] ?? '—'}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
 async function preencherSelect(elementId, tabela, campoValor, campoLabel, filtro){
   let query = sb.from(tabela).select(`${campoValor}, ${campoLabel}`);
   if(filtro){ Object.entries(filtro).forEach(([k,v])=> query = query.eq(k, v)); }
   const { data, error } = await query;
   const el = document.getElementById(elementId);
+  if(!el) return;
   if(error || !data){ el.innerHTML = '<option value="">(erro ao carregar)</option>'; return; }
   el.innerHTML = '<option value="">Selecione…</option>' + data.map(d=>`<option value="${d[campoValor]}">${d[campoLabel]}</option>`).join('');
 }
@@ -602,14 +968,7 @@ async function preencherSelect(elementId, tabela, campoValor, campoLabel, filtro
 /* ---------------- boot: mantém sessão se já estiver logado ---------------- */
 (async ()=>{
   const { data: { session } } = await sb.auth.getSession();
-  if(session){
-    usuarioAtual = session.user;
-    await carregarContextoUsuario();
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('sidebar').style.display = 'flex';
-    document.getElementById('main').style.display = 'block';
-    carregarPedidos();
-  }
+  if(session){ usuarioAtual = session.user; await entrarNoApp(); }
 })();
 </script>
 </body>
