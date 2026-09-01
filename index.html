@@ -603,9 +603,13 @@ async function extrairTextoPdf(file){
 
 function extrairCabecalhoPedido(linhas){
   let numero = null, fornecedorNome = null, fornecedorCnpj = null, obraNome = null;
-  const reNumero = /N[ºo]\.?\s*Pedido\s*(\d+)/i;
+  const reNumeroAntes = /(\d{3,})\s*\d{1,2}\/\d{1,2}\/\d{4}/;    // ex: "57585 31/08/2026Nº Pedido..."
+  const reNumeroDepois = /N[ºo]\.?\s*Pedido\s*(\d+)/i;            // ex: "Nº Pedido57585..."
   for(const l of linhas){
-    const m = l.match(reNumero);
+    if(!/pedido/i.test(l)) continue;
+    let m = l.match(reNumeroAntes);
+    if(m){ numero = m[1]; break; }
+    m = l.match(reNumeroDepois);
     if(m){ numero = m[1]; break; }
   }
   const idxFornecedor = linhas.findIndex(l => /Dados do fornecedor/i.test(l));
