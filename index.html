@@ -498,7 +498,9 @@ async function carregarPedidos(){
 
 async function abrirModalPedido(){
   await preencherSelect('pedido-cc', 'centros_custo', 'id', 'nome', { empresa_id: empresaAtual });
-  await preencherSelect('pedido-fornecedor', 'fornecedores', 'id', 'nome');
+  const { data: fornecedoresDisponiveis } = await sb.from('fornecedores').select('id, nome, cnpj').order('nome');
+  const selFornecedor = document.getElementById('pedido-fornecedor');
+  selFornecedor.innerHTML = '<option value="">Selecione…</option>' + (fornecedoresDisponiveis||[]).map(f=>`<option value="${f.id}" data-cnpj="${(f.cnpj||'').replace(/\D/g,'')}">${f.nome}</option>`).join('');
   document.getElementById('pedido-numero').value = '';
   document.getElementById('pedido-itens').innerHTML = '';
   document.getElementById('pedido-msg').innerHTML = '';
@@ -523,7 +525,9 @@ async function addLinhaPedidoItem(valores){
   const { data: insumosDisponiveis } = await sb.from('insumos').select('id, codigo_interno, descricao').eq('ativo', true).order('descricao');
   const sel = document.getElementById(selId);
   sel.innerHTML = '<option value="">Selecione…</option>' + (insumosDisponiveis||[]).map(i=>`<option value="${i.id}">${i.codigo_interno} — ${i.descricao}</option>`).join('');
-  if(valores?.codigoSugerido){
+  if(valores?.insumoIdSugerido && [...sel.options].some(o => o.value === valores.insumoIdSugerido)){
+    sel.value = valores.insumoIdSugerido;
+  } else if(valores?.codigoSugerido){
     const alvo = valores.codigoSugerido.trim();
     let achou = false;
     [...sel.options].forEach(opt=>{ if(opt.text.startsWith(alvo + ' —')) { sel.value = opt.value; achou = true; } });
@@ -595,6 +599,80 @@ async function extrairTextoPdf(file){
   return linhas;
 }
 
+function extrairCabecalhoPedido(linhas){
+  let numero = null, fornecedorNome = null, fornecedorCnpj = null, obraNome = null;
+  const reNumero = /N[ºo]\.?\s*Pedido\s*(\d+)/i;
+  for(const l of linhas){
+    const m = l.match(reNumero);
+    if(m){ numero = m[1]; break; }
+  }
+  const idxFornecedor = linhas.findIndex(l => /Dados do fornecedor/i.test(l));
+  if(idxFornecedor >= 0){
+    for(let i = idxFornecedor; i < Math.min(idxFornecedor + 4, linhas.length); i++){
+      const m = linhas[i].match(/^\s*\d+\s*-\s*(.+?)\s*CNPJ\s*([\d.\/-]+)/i);
+      if(m){ fornecedorNome = m[1].trim(); fornecedorCnpj = m[2].replace(/\D/g,''); break; }
+    }
+  }
+  const idxObra = linhas.findIndex(l => /Dados da obra/i.test(l));
+  if(idxObra >= 0 && linhas[idxObra + 1]){
+    const m = linhas[idxObra + 1].match(/^(.*?)\s*Ponto de ref\.?/i);
+    obraNome = (m ? m[1] : linhas[idxObra + 1]).trim();
+    if(!obraNome) obraNome = null;
+  }
+  return { numero, fornecedorNome, fornecedorCnpj, obraNome };
+}
+
+function formatarCnpj(digits){
+  if(!digits || digits.length !== 14) return digits || '';
+  return `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8,12)}-${digits.slice(12,14)}`;
+}
+
+/* ---- Localiza ou cria fornecedor, centro de custo, unidade e insumo, a partir dos dados do PDF ---- */
+async function buscarOuCriarFornecedor(nome, cnpjDigits){
+  if(!cnpjDigits) return null;
+  const { data: existente } = await sb.from('fornecedores').select('id, nome').eq('cnpj', formatarCnpj(cnpjDigits)).maybeSingle();
+  if(existente) return { id: existente.id, nome: existente.nome, criado: false };
+  const { data: novo, error } = await sb.from('fornecedores').insert({
+    nome: nome || `Fornecedor ${formatarCnpj(cnpjDigits)}`, cnpj: formatarCnpj(cnpjDigits)
+  }).select().single();
+  if(error) throw new Error('fornecedor: ' + error.message);
+  return { id: novo.id, nome: novo.nome, criado: true };
+}
+
+async function buscarOuCriarCentroCusto(nomeObra){
+  if(!nomeObra) return null;
+  const { data: existente } = await sb.from('centros_custo').select('id, nome')
+    .eq('empresa_id', empresaAtual).ilike('nome', nomeObra).maybeSingle();
+  if(existente) return { id: existente.id, nome: existente.nome, criado: false };
+  const codigo = nomeObra.toUpperCase().replace(/[^A-Z0-9]+/g,'-').slice(0,30) || ('OBRA-' + Date.now());
+  const { data: novo, error } = await sb.from('centros_custo').insert({
+    empresa_id: empresaAtual, codigo, nome: nomeObra
+  }).select().single();
+  if(error) throw new Error('centro de custo: ' + error.message);
+  return { id: novo.id, nome: novo.nome, criado: true };
+}
+
+async function buscarOuCriarUnidade(sigla){
+  const s = (sigla || 'un').toLowerCase();
+  const { data: existente } = await sb.from('unidades_medida').select('id').ilike('sigla', s).maybeSingle();
+  if(existente) return existente.id;
+  const { data: nova, error } = await sb.from('unidades_medida').insert({ sigla: s, descricao: s }).select().single();
+  if(error) throw new Error('unidade de medida: ' + error.message);
+  return nova.id;
+}
+
+async function buscarOuCriarInsumo(codigo, descricao, unidadeSigla){
+  if(!codigo) return null;
+  const { data: existente } = await sb.from('insumos').select('id, descricao').eq('codigo_interno', codigo).maybeSingle();
+  if(existente) return { id: existente.id, descricao: existente.descricao, criado: false };
+  const unidade_id = await buscarOuCriarUnidade(unidadeSigla);
+  const { data: novo, error } = await sb.from('insumos').insert({
+    codigo_interno: codigo, descricao: descricao || `Insumo ${codigo}`, unidade_id, estoque_minimo: 0
+  }).select().single();
+  if(error) throw new Error('insumo: ' + error.message);
+  return { id: novo.id, descricao: novo.descricao, criado: true };
+}
+
 function parseLinhasPedido(linhas){
   const itens = [];
   // Formato Sienge/Starian: "CODIGO - DESCRICAO  QTDE+UNIDADE  PR.UNIT  DESCONTO  %DESC  %IPI  %ACRESC  PRECO_FINAL"
@@ -638,14 +716,47 @@ async function processarPdfPedido(ev){
   try{
     const linhas = await extrairTextoPdf(file);
     const itens = parseLinhasPedido(linhas);
+    const cabecalho = extrairCabecalhoPedido(linhas);
+
+    const avisos = [];
+
+    if(cabecalho.numero && !document.getElementById('pedido-numero').value){
+      document.getElementById('pedido-numero').value = cabecalho.numero;
+      avisos.push(`número do pedido preenchido (${cabecalho.numero})`);
+    }
+
+    if(cabecalho.fornecedorCnpj){
+      const fornecedor = await buscarOuCriarFornecedor(cabecalho.fornecedorNome, cabecalho.fornecedorCnpj);
+      if(fornecedor){
+        const selFornecedor = document.getElementById('pedido-fornecedor');
+        if(![...selFornecedor.options].some(o => o.value === fornecedor.id)){
+          selFornecedor.innerHTML += `<option value="${fornecedor.id}" data-cnpj="${cabecalho.fornecedorCnpj}">${fornecedor.nome}</option>`;
+        }
+        selFornecedor.value = fornecedor.id;
+        avisos.push(fornecedor.criado ? `fornecedor "${fornecedor.nome}" cadastrado automaticamente` : `fornecedor identificado (${fornecedor.nome})`);
+      }
+    }
+
+    if(cabecalho.obraNome){
+      const centro = await buscarOuCriarCentroCusto(cabecalho.obraNome);
+      if(centro){
+        const selCc = document.getElementById('pedido-cc');
+        if(![...selCc.options].some(o => o.value === centro.id)){
+          selCc.innerHTML += `<option value="${centro.id}">${centro.nome}</option>`;
+        }
+        selCc.value = centro.id;
+        avisos.push(centro.criado ? `centro de custo "${centro.nome}" cadastrado automaticamente (a partir da obra)` : `centro de custo identificado (${centro.nome})`);
+      }
+    }
+
     if(!itens.length){
-      status.innerHTML = 'Não consegui separar itens automaticamente neste PDF — adicione manualmente abaixo, ou copie o texto do PDF e ajuste.';
+      status.innerHTML = ['Não consegui separar itens automaticamente neste PDF — adicione manualmente abaixo, ou copie o texto do PDF e ajuste.', ...avisos].join(' — ');
       return;
     }
-    status.innerHTML = `${itens.length} linha(s) identificada(s). Revise antes de usar — a leitura é heurística e pode errar.`;
+    status.innerHTML = [`${itens.length} linha(s) identificada(s). Revise antes de usar — a leitura é heurística e pode errar.`, ...avisos].join(' — ');
     preview.innerHTML = `<label style="font-size:12px;color:var(--text-dim);">Itens extraídos do PDF (revise e ajuste)</label>` +
       itens.map((it,idx)=>`
-        <div class="pdf-preview-row" data-idx="${idx}" data-codigo="${(it.codigo||'').replace(/"/g,'&quot;')}">
+        <div class="pdf-preview-row" data-idx="${idx}" data-codigo="${(it.codigo||'').replace(/"/g,'&quot;')}" data-unidade="${(it.unidade||'un').replace(/"/g,'&quot;')}">
           <div class="field"><input class="pdf-desc" value="${it.descricao.replace(/"/g,'&quot;')}"></div>
           <div class="field"><input type="number" step="0.0001" class="pdf-qtd" value="${it.quantidade}"></div>
           <div class="field"><input type="number" step="0.01" class="pdf-valor" value="${it.valor_unitario}"></div>
@@ -660,16 +771,31 @@ async function processarPdfPedido(ev){
 async function usarItensDoPdf(){
   const linhas = [...document.querySelectorAll('.pdf-preview-row')];
   document.getElementById('pedido-itens').innerHTML = '';
+  const criados = [];
   for(const row of linhas){
+    const codigo = row.dataset.codigo || null;
+    const descricao = row.querySelector('.pdf-desc').value;
+    const unidade = row.dataset.unidade || 'un';
+    let insumo = null;
+    if(codigo){
+      try{
+        insumo = await buscarOuCriarInsumo(codigo, descricao, unidade);
+        if(insumo && insumo.criado) criados.push(`${codigo} — ${insumo.descricao}`);
+      }catch(e){
+        criados.push(`falha ao cadastrar insumo ${codigo}: ${e.message}`);
+      }
+    }
     await addLinhaPedidoItem({
-      codigoSugerido: row.dataset.codigo || null,
-      descricaoSugerida: row.querySelector('.pdf-desc').value,
+      insumoIdSugerido: insumo ? insumo.id : null,
+      codigoSugerido: codigo,
+      descricaoSugerida: descricao,
       quantidade: row.querySelector('.pdf-qtd').value,
       preco: row.querySelector('.pdf-valor').value
     });
   }
   document.getElementById('pdf-preview').innerHTML = '';
-  document.getElementById('pdf-status').innerHTML = 'Itens transferidos para o formulário abaixo — confira o insumo vinculado em cada linha antes de salvar (a sugestão é automática e pode não bater com o catálogo).';
+  const msgInsumos = criados.length ? ` Insumos cadastrados automaticamente: ${criados.join('; ')}.` : '';
+  document.getElementById('pdf-status').innerHTML = 'Itens transferidos para o formulário abaixo — confira antes de salvar.' + msgInsumos;
 }
 
 /* ==========================================================================
