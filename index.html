@@ -896,15 +896,52 @@ async function preencherSelectEstoques(elementId){
   el.innerHTML = '<option value="">Selecione…</option>' + (data||[]).map(e=>`<option value="${e.id}">${e.codigo}</option>`).join('');
 }
 async function carregarLocaisConfig(){
-  const { data: estoques } = await sb.from('localizacoes').select('codigo, empresas!localizacoes_empresa_id_fkey(razao_social)').eq('tipo','estoque').order('codigo');
-  document.getElementById('lista-estoques').innerHTML = renderTabelaSimples(estoques?.map(e=>({
-    nome: e.codigo, empresa: e.empresas?.razao_social
-  })), [ { campo:'nome', titulo:'Estoque' }, { campo:'empresa', titulo:'Empresa' } ], 'Nenhum estoque cadastrado.');
+  const { data: estoques } = await sb.from('localizacoes').select('id, codigo, empresas!localizacoes_empresa_id_fkey(razao_social)').eq('tipo','estoque').order('codigo');
+  document.getElementById('lista-estoques').innerHTML = renderListaEstoques(estoques);
 
-  const { data: enderecos } = await sb.from('localizacoes_caminho').select('codigo, caminho').eq('tipo','endereco').order('caminho');
-  document.getElementById('lista-enderecos').innerHTML = renderTabelaSimples(enderecos?.map(e=>({
-    caminho: e.caminho
-  })), [ { campo:'caminho', titulo:'Endereço' } ], 'Nenhum endereço cadastrado.');
+  const { data: enderecos } = await sb.from('localizacoes_caminho').select('id, codigo, caminho').eq('tipo','endereco').order('caminho');
+  document.getElementById('lista-enderecos').innerHTML = renderListaEnderecos(enderecos);
+}
+
+function renderListaEstoques(data){
+  if(!data || !data.length) return '<div class="empty">Nenhum estoque cadastrado.</div>';
+  return `<table><thead><tr><th>Estoque</th><th>Empresa</th><th></th></tr></thead><tbody>${data.map(e=>`
+    <tr><td>${e.codigo}</td><td>${e.empresas?.razao_social || '—'}</td>
+    <td><button class="link-plain" onclick="excluirEstoque('${e.id}')">excluir</button></td></tr>`).join('')}</tbody></table>`;
+}
+function renderListaEnderecos(data){
+  if(!data || !data.length) return '<div class="empty">Nenhum endereço cadastrado.</div>';
+  return `<table><thead><tr><th>Endereço</th><th></th></tr></thead><tbody>${data.map(e=>`
+    <tr><td>${e.caminho}</td><td><button class="link-plain" onclick="excluirEndereco('${e.id}')">excluir</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+async function excluirEstoque(id){
+  if(!confirm('Excluir este estoque? Os endereços cadastrados dentro dele também serão apagados, desde que nenhum tenha movimentação de estoque registrada.')) return;
+  const { error } = await sb.from('localizacoes').delete().eq('id', id);
+  if(error){
+    if(error.code === '23503'){
+      alert('Não é possível excluir: existem endereços com entradas/saídas de estoque (ou saldo) registradas dentro desse estoque. Locais com histórico de movimentação não podem ser removidos.');
+    } else {
+      alert('Erro ao excluir: ' + error.message);
+    }
+    return;
+  }
+  carregarLocaisConfig();
+  preencherSelectEstoques('endereco-estoque');
+}
+
+async function excluirEndereco(id){
+  if(!confirm('Excluir este endereço?')) return;
+  const { error } = await sb.from('localizacoes').delete().eq('id', id);
+  if(error){
+    if(error.code === '23503'){
+      alert('Não é possível excluir: existem movimentações de estoque (entradas/saídas) ou saldo registrado neste endereço.');
+    } else {
+      alert('Erro ao excluir: ' + error.message);
+    }
+    return;
+  }
+  carregarLocaisConfig();
 }
 async function salvarEstoque(){
   const msg = document.getElementById('estoques-msg');
