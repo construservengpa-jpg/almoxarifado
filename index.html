@@ -896,7 +896,7 @@ async function preencherSelectEstoques(elementId){
   el.innerHTML = '<option value="">Selecione…</option>' + (data||[]).map(e=>`<option value="${e.id}">${e.codigo}</option>`).join('');
 }
 async function carregarLocaisConfig(){
-  const { data: estoques } = await sb.from('localizacoes').select('codigo, empresas(razao_social)').eq('tipo','estoque').order('codigo');
+  const { data: estoques } = await sb.from('localizacoes').select('codigo, empresas!localizacoes_empresa_id_fkey(razao_social)').eq('tipo','estoque').order('codigo');
   document.getElementById('lista-estoques').innerHTML = renderTabelaSimples(estoques?.map(e=>({
     nome: e.codigo, empresa: e.empresas?.razao_social
   })), [ { campo:'nome', titulo:'Estoque' }, { campo:'empresa', titulo:'Empresa' } ], 'Nenhum estoque cadastrado.');
