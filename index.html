@@ -572,16 +572,25 @@ async function extrairTextoPdf(file){
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
   let linhas = [];
+  const TOLERANCIA_Y = 2.5; // agrupa textos na mesma linha visual mesmo com pequena diferença de Y (sub-pixel)
   for(let p=1; p<=pdf.numPages; p++){
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    // agrupa por posição Y aproximada pra reconstituir linhas
-    const porLinha = {};
-    content.items.forEach(it=>{
-      const y = Math.round(it.transform[5]);
-      porLinha[y] = (porLinha[y] || '') + it.str;
+    const itens = content.items.map(it => ({ x: it.transform[4], y: it.transform[5], str: it.str }));
+    itens.sort((a,b)=> b.y - a.y || a.x - b.x); // topo->fundo, depois esquerda->direita
+    let linhaAtual = [];
+    let yReferencia = null;
+    itens.forEach(it=>{
+      if(yReferencia === null || Math.abs(it.y - yReferencia) <= TOLERANCIA_Y){
+        linhaAtual.push(it.str);
+        yReferencia = yReferencia === null ? it.y : yReferencia;
+      } else {
+        linhas.push(linhaAtual.join(''));
+        linhaAtual = [it.str];
+        yReferencia = it.y;
+      }
     });
-    Object.keys(porLinha).sort((a,b)=>b-a).forEach(y=> linhas.push(porLinha[y]));
+    if(linhaAtual.length) linhas.push(linhaAtual.join(''));
   }
   return linhas;
 }
@@ -590,7 +599,7 @@ function parseLinhasPedido(linhas){
   const itens = [];
   // Formato Sienge/Starian: "CODIGO - DESCRICAO  QTDE+UNIDADE  PR.UNIT  DESCONTO  %DESC  %IPI  %ACRESC  PRECO_FINAL"
   // ex: "15110 - MALETA PARA KIT PRIMEIROS SOCORROS 2,0000un 125,0000 0,00 0,00 0,00 0,00 250,00"
-  const RE_SIENGE = /^(\d+)\s*-\s*(.+?)\s+(\d+(?:[.,]\d+)?)\s*([A-Za-zÀ-ÿ²³]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
+  const RE_SIENGE = /^(\d+)\s*-\s*(.+?)(\d+(?:[.,]\d+)?)\s*([A-Za-zÀ-ÿ²³]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
   // Fallback genérico: "DESCRICAO  QTDE  VALOR[  VALOR2]" — usado quando o layout não é o do Sienge
   const RE_GENERICO = /([\d.,]+)\s+([\d.,]+)(?:\s+([\d.,]+))?\s*$/;
 
