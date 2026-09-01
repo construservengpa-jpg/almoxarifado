@@ -284,6 +284,7 @@ function abrirModal(id){ document.getElementById(id).classList.add('open'); }
    ========================================================================== */
 async function carregarPedidos(){
   const box = document.getElementById('tabela-pedidos');
+  if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa. Peça ao administrador para cadastrar um vínculo em usuario_empresas.</div>'; return; }
   const { data, error } = await sb.from('pedidos_compra')
     .select('id, numero, status, data_pedido, fornecedores(nome), centros_custo(nome)')
     .eq('empresa_id', empresaAtual)
@@ -363,6 +364,7 @@ async function salvarPedido(){
    ========================================================================== */
 async function carregarNotas(){
   const box = document.getElementById('tabela-notas');
+  if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa. Peça ao administrador para cadastrar um vínculo em usuario_empresas.</div>'; return; }
   const { data, error } = await sb.from('notas_fiscais')
     .select('id, numero, serie, status, data_recebimento, valor_total, fornecedores(nome)')
     .eq('empresa_id', empresaAtual)
@@ -533,6 +535,7 @@ async function processarEntradaItem(itemId, btn){
    ========================================================================== */
 async function carregarSaldo(){
   const box = document.getElementById('tabela-saldo');
+  if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa.</div>'; return; }
   const busca = document.getElementById('busca-saldo')?.value?.trim() || '';
 
   let query = sb.from('estoque_saldos')
