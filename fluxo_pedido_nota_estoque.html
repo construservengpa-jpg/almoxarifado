@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estoque AMETA — Pedido · Nota · Entrada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#1A1D1F; --panel:#24282B; --panel-2:#2C3134; --line:#383D40;
+    --text:#ECEAE4; --text-dim:#9AA0A3; --accent:#F5C433; --accent-ink:#20221E;
+    --ok:#4C9A6A; --warn:#D98A32; --danger:#C1443C; --info:#6FA8B8;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;}
+  h1,h2,h3{font-family:'Oswald',sans-serif;font-weight:600;margin:0;letter-spacing:.2px;}
+  code,.mono,input[type=number],.qtd,.valor{font-family:'JetBrains Mono',monospace;}
+  a{color:var(--info);}
+  #app{display:flex;min-height:100vh;}
+
+  /* ---- Login ---- */
+  #login-screen{width:100%;display:flex;align-items:center;justify-content:center;min-height:100vh;}
+  .login-box{background:var(--panel);border:1px solid var(--line);padding:36px;width:320px;border-radius:var(--radius);}
+  .login-box h1{font-size:22px;margin-bottom:4px;}
+  .login-box p{color:var(--text-dim);font-size:13px;margin:0 0 20px;}
+
+  /* ---- Sidebar ---- */
+  #sidebar{width:220px;background:var(--panel);border-right:1px solid var(--line);flex-shrink:0;display:flex;flex-direction:column;}
+  #sidebar .brand{padding:20px 18px 14px;border-bottom:1px solid var(--line);}
+  #sidebar .brand h1{font-size:16px;color:var(--accent);}
+  #sidebar .brand span{font-size:11px;color:var(--text-dim);}
+  #sidebar nav{flex:1;padding:10px 0;}
+  #sidebar nav button{
+    display:block;width:100%;text-align:left;background:none;border:none;color:var(--text-dim);
+    padding:11px 18px;font-size:13.5px;cursor:pointer;border-left:3px solid transparent;
+  }
+  #sidebar nav button:hover{color:var(--text);background:var(--panel-2);}
+  #sidebar nav button.active{color:var(--accent);border-left-color:var(--accent);background:var(--panel-2);}
+  #sidebar .userbox{padding:14px 18px;border-top:1px solid var(--line);font-size:12px;color:var(--text-dim);}
+  #sidebar .userbox button{background:none;border:none;color:var(--info);cursor:pointer;font-size:12px;padding:0;margin-top:4px;}
+
+  /* ---- Main ---- */
+  #main{flex:1;padding:28px 34px;overflow-y:auto;height:100vh;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .view-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+  .view-header h2{font-size:20px;}
+  .btn{background:var(--accent);color:var(--accent-ink);border:none;padding:9px 16px;font-weight:600;
+       font-size:13px;border-radius:var(--radius);cursor:pointer;}
+  .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text);}
+  .btn.small{padding:5px 10px;font-size:12px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px;}
+  th{color:var(--text-dim);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;}
+  tr:last-child td{border-bottom:none;}
+
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+  .badge.pendente{background:#3A3320;color:var(--warn);}
+  .badge.processado, .badge.recebida{background:#233A2A;color:var(--ok);}
+  .badge.divergente{background:#3A2323;color:var(--danger);}
+
+  /* ---- Modal ---- */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-start;
+           justify-content:center;padding:40px 20px;overflow-y:auto;z-index:50;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--line);width:640px;max-width:100%;padding:26px;border-radius:var(--radius);}
+  .modal h3{font-size:17px;margin-bottom:16px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:5px;}
+  .field input,.field select,.field textarea{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:8px 10px;font-size:13.5px;border-radius:var(--radius);font-family:'Inter',sans-serif;
+  }
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .row3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;}
+  .item-row{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;}
+  .item-row .field{margin-bottom:0;}
+  .link-plain{background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:8px 4px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
+  .msg{font-size:12.5px;padding:8px 10px;border-radius:var(--radius);margin-bottom:14px;}
+  .msg.error{background:#3A2323;color:#F0908A;}
+  .msg.ok{background:#233A2A;color:#8FD1A6;}
+
+  .empty{color:var(--text-dim);font-size:13px;padding:30px;text-align:center;border:1px dashed var(--line);border-radius:var(--radius);}
+  .toolbar{display:flex;gap:10px;margin-bottom:16px;}
+  .toolbar select,.toolbar input{background:var(--panel);border:1px solid var(--line);color:var(--text);
+     padding:7px 10px;font-size:13px;border-radius:var(--radius);}
+  .nota-item-block{background:var(--panel-2);border:1px solid var(--line);padding:14px;margin-bottom:10px;border-radius:var(--radius);}
+  .nota-item-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;}
+  .nota-item-top .desc{color:var(--text);}
+  .nota-item-top .valores{color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .nota-item-grid{display:grid;grid-template-columns:2fr 1.4fr auto;gap:8px;align-items:end;}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="login-screen">
+    <div class="login-box">
+      <h1>Estoque AMETA</h1>
+      <p>Pedido de compra · Nota fiscal · Entrada de estoque</p>
+      <div id="login-msg"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="login-email"></div>
+      <div class="field"><label>Senha</label><input type="password" id="login-senha"></div>
+      <button class="btn" style="width:100%" onclick="fazerLogin()">Entrar</button>
+    </div>
+  </div>
+
+  <div id="sidebar" style="display:none">
+    <div class="brand"><h1>ESTOQUE</h1><span>AMETA Engenharia</span></div>
+    <nav>
+      <button data-view="pedidos" class="active">Pedidos de Compra</button>
+      <button data-view="notas">Notas Fiscais</button>
+      <button data-view="saldo">Saldo de Estoque</button>
+      <button data-view="alertas">Alerta de Mínimo</button>
+    </nav>
+    <div class="userbox">
+      <div id="user-nome"></div>
+      <button onclick="fazerLogout()">Sair</button>
+    </div>
+  </div>
+
+  <div id="main" style="display:none">
+
+    <!-- PEDIDOS DE COMPRA -->
+    <div class="view active" id="view-pedidos">
+      <div class="view-header">
+        <h2>Pedidos de Compra</h2>
+        <button class="btn" onclick="abrirModalPedido()">Novo pedido</button>
+      </div>
+      <div id="tabela-pedidos"><div class="empty">Carregando…</div></div>
+    </div>
+
+    <!-- NOTAS FISCAIS -->
+    <div class="view" id="view-notas">
+      <div class="view-header">
+        <h2>Notas Fiscais</h2>
+        <button class="btn" onclick="abrirModalNota()">Nova nota fiscal</button>
+      </div>
+      <div id="tabela-notas"><div class="empty">Carregando…</div></div>
+    </div>
+
+    <!-- SALDO -->
+    <div class="view" id="view-saldo">
+      <div class="view-header"><h2>Saldo de Estoque</h2></div>
+      <div class="toolbar">
+        <input type="text" id="busca-saldo" placeholder="Buscar insumo…" oninput="carregarSaldo()">
+      </div>
+      <div id="tabela-saldo"><div class="empty">Carregando…</div></div>
+    </div>
+
+    <!-- ALERTAS -->
+    <div class="view" id="view-alertas">
+      <div class="view-header"><h2>Insumos abaixo do estoque mínimo</h2></div>
+      <div id="tabela-alertas"><div class="empty">Carregando…</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL: NOVO PEDIDO -->
+<div class="overlay" id="modal-pedido">
+  <div class="modal">
+    <h3>Novo pedido de compra</h3>
+    <div id="pedido-msg"></div>
+    <div class="row2">
+      <div class="field"><label>Centro de custo</label><select id="pedido-cc"></select></div>
+      <div class="field"><label>Fornecedor</label><select id="pedido-fornecedor"></select></div>
+    </div>
+    <div class="field"><label>Número do pedido</label><input type="text" id="pedido-numero"></div>
+    <label style="font-size:12px;color:var(--text-dim);">Itens</label>
+    <div id="pedido-itens" style="margin-top:8px;"></div>
+    <button class="btn secondary small" onclick="addLinhaPedidoItem()">+ Adicionar item</button>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="fecharModal('modal-pedido')">Cancelar</button>
+      <button class="btn" onclick="salvarPedido()">Salvar pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NOVA NOTA FISCAL -->
+<div class="overlay" id="modal-nota">
+  <div class="modal">
+    <h3>Nova nota fiscal</h3>
+    <div id="nota-msg"></div>
+    <div class="row3">
+      <div class="field"><label>Fornecedor</label><select id="nota-fornecedor"></select></div>
+      <div class="field"><label>Número</label><input type="text" id="nota-numero"></div>
+      <div class="field"><label>Série</label><input type="text" id="nota-serie"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Data de emissão</label><input type="date" id="nota-emissao"></div>
+      <div class="field"><label>Data de recebimento</label><input type="date" id="nota-recebimento"></div>
+    </div>
+    <label style="font-size:12px;color:var(--text-dim);">Itens (conforme descrição do fornecedor)</label>
+    <div id="nota-itens" style="margin-top:8px;"></div>
+    <button class="btn secondary small" onclick="addLinhaNotaItem()">+ Adicionar item</button>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="fecharModal('modal-nota')">Cancelar</button>
+      <button class="btn" onclick="salvarNota()">Salvar nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALHE DA NOTA (vínculo + entrada) -->
+<div class="overlay" id="modal-detalhe-nota">
+  <div class="modal" style="width:760px;">
+    <h3 id="detalhe-nota-titulo">Nota fiscal</h3>
+    <div id="detalhe-nota-msg"></div>
+    <div id="detalhe-nota-itens"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="fecharModal('modal-detalhe-nota')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+   CONFIGURAÇÃO — preencha com a URL e a anon key do seu Supabase
+   (Studio → Project Settings → API)
+   ========================================================================== */
+const SUPABASE_URL = 'https://SEU-SERVIDOR-OU-PROJETO:8443';
+const SUPABASE_ANON_KEY = 'SUA_ANON_KEY_AQUI';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let usuarioAtual = null;
+let empresaAtual = null; // assume 1ª empresa vinculada ao usuário; troque por seletor se tiver mais de uma
+
+/* ---------------- AUTENTICAÇÃO ---------------- */
+async function fazerLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const msg = document.getElementById('login-msg');
+  msg.innerHTML = '';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
+  if(error){ msg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+  usuarioAtual = data.user;
+  await carregarContextoUsuario();
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('sidebar').style.display = 'flex';
+  document.getElementById('main').style.display = 'block';
+  carregarPedidos();
+}
+
+async function fazerLogout(){
+  await sb.auth.signOut();
+  location.reload();
+}
+
+async function carregarContextoUsuario(){
+  const { data: perfil } = await sb.from('perfis').select('*').eq('id', usuarioAtual.id).single();
+  document.getElementById('user-nome').textContent = perfil?.nome || usuarioAtual.email;
+
+  const { data: acessos } = await sb.from('usuario_empresas').select('empresa_id, empresas(razao_social)').eq('usuario_id', usuarioAtual.id);
+  if(acessos && acessos.length){ empresaAtual = acessos[0].empresa_id; }
+}
+
+/* ---------------- NAVEGAÇÃO ---------------- */
+document.querySelectorAll('#sidebar nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#sidebar nav button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    if(btn.dataset.view==='pedidos') carregarPedidos();
+    if(btn.dataset.view==='notas') carregarNotas();
+    if(btn.dataset.view==='saldo') carregarSaldo();
+    if(btn.dataset.view==='alertas') carregarAlertas();
+  });
+});
+
+function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
+function abrirModal(id){ document.getElementById(id).classList.add('open'); }
+
+/* ==========================================================================
+   PEDIDOS DE COMPRA
+   ========================================================================== */
+async function carregarPedidos(){
+  const box = document.getElementById('tabela-pedidos');
+  const { data, error } = await sb.from('pedidos_compra')
+    .select('id, numero, status, data_pedido, fornecedores(nome), centros_custo(nome)')
+    .eq('empresa_id', empresaAtual)
+    .order('data_pedido', { ascending:false });
+
+  if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+  if(!data.length){ box.innerHTML = '<div class="empty">Nenhum pedido cadastrado ainda.</div>'; return; }
+
+  box.innerHTML = `<table><thead><tr>
+    <th>Número</th><th>Fornecedor</th><th>Centro de custo</th><th>Data</th><th>Status</th>
+  </tr></thead><tbody>${data.map(p=>`
+    <tr>
+      <td class="mono">${p.numero}</td>
+      <td>${p.fornecedores?.nome || '—'}</td>
+      <td>${p.centros_custo?.nome || '—'}</td>
+      <td class="mono">${p.data_pedido}</td>
+      <td><span class="badge ${p.status}">${p.status}</span></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function abrirModalPedido(){
+  await preencherSelect('pedido-cc', 'centros_custo', 'id', 'nome', { empresa_id: empresaAtual });
+  await preencherSelect('pedido-fornecedor', 'fornecedores', 'id', 'nome');
+  document.getElementById('pedido-numero').value = '';
+  document.getElementById('pedido-itens').innerHTML = '';
+  document.getElementById('pedido-msg').innerHTML = '';
+  addLinhaPedidoItem();
+  abrirModal('modal-pedido');
+}
+
+async function addLinhaPedidoItem(){
+  const wrap = document.getElementById('pedido-itens');
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  const selId = 'insumo-sel-'+Date.now()+Math.random().toString(36).slice(2,6);
+  row.innerHTML = `
+    <div class="field"><label>Insumo</label><select id="${selId}" class="pedido-insumo"></select></div>
+    <div class="field"><label>Quantidade</label><input type="number" step="0.0001" class="pedido-qtd qtd"></div>
+    <div class="field"><label>Preço estimado</label><input type="number" step="0.01" class="pedido-preco valor"></div>
+    <button class="link-plain" onclick="this.closest('.item-row').remove()">remover</button>`;
+  wrap.appendChild(row);
+  await preencherSelect(selId, 'insumos', 'id', 'descricao', { ativo: true });
+}
+
+async function salvarPedido(){
+  const msg = document.getElementById('pedido-msg');
+  const centro_custo_id = document.getElementById('pedido-cc').value;
+  const fornecedor_id = document.getElementById('pedido-fornecedor').value;
+  const numero = document.getElementById('pedido-numero').value.trim();
+  if(!numero || !centro_custo_id){ msg.innerHTML = '<div class="msg error">Preencha centro de custo e número do pedido.</div>'; return; }
+
+  const linhas = [...document.querySelectorAll('#pedido-itens .item-row')].map(row=>({
+    insumo_id: row.querySelector('.pedido-insumo').value,
+    quantidade: parseFloat(row.querySelector('.pedido-qtd').value),
+    preco_estimado: parseFloat(row.querySelector('.pedido-preco').value) || null
+  })).filter(i=>i.insumo_id && i.quantidade > 0);
+
+  if(!linhas.length){ msg.innerHTML = '<div class="msg error">Adicione ao menos um item válido.</div>'; return; }
+
+  const { data: pedido, error } = await sb.from('pedidos_compra').insert({
+    empresa_id: empresaAtual, centro_custo_id, fornecedor_id: fornecedor_id || null,
+    numero, solicitante_id: usuarioAtual.id, status: 'enviado'
+  }).select().single();
+
+  if(error){ msg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+
+  const itens = linhas.map(l=>({ ...l, pedido_id: pedido.id }));
+  const { error: errItens } = await sb.from('pedidos_compra_itens').insert(itens);
+  if(errItens){ msg.innerHTML = `<div class="msg error">${errItens.message}</div>`; return; }
+
+  fecharModal('modal-pedido');
+  carregarPedidos();
+}
+
+/* ==========================================================================
+   NOTAS FISCAIS
+   ========================================================================== */
+async function carregarNotas(){
+  const box = document.getElementById('tabela-notas');
+  const { data, error } = await sb.from('notas_fiscais')
+    .select('id, numero, serie, status, data_recebimento, valor_total, fornecedores(nome)')
+    .eq('empresa_id', empresaAtual)
+    .order('criado_em', { ascending:false });
+
+  if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+  if(!data.length){ box.innerHTML = '<div class="empty">Nenhuma nota fiscal lançada ainda.</div>'; return; }
+
+  box.innerHTML = `<table><thead><tr>
+    <th>Número/Série</th><th>Fornecedor</th><th>Recebimento</th><th>Valor</th><th>Status</th><th></th>
+  </tr></thead><tbody>${data.map(n=>`
+    <tr>
+      <td class="mono">${n.numero}${n.serie ? '/'+n.serie : ''}</td>
+      <td>${n.fornecedores?.nome || '—'}</td>
+      <td class="mono">${n.data_recebimento || '—'}</td>
+      <td class="mono">${n.valor_total ? 'R$ '+Number(n.valor_total).toFixed(2) : '—'}</td>
+      <td><span class="badge ${n.status}">${n.status}</span></td>
+      <td><button class="btn small secondary" onclick="abrirDetalheNota('${n.id}')">Vincular / Processar</button></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function abrirModalNota(){
+  await preencherSelect('nota-fornecedor', 'fornecedores', 'id', 'nome');
+  document.getElementById('nota-numero').value = '';
+  document.getElementById('nota-serie').value = '';
+  document.getElementById('nota-emissao').value = '';
+  document.getElementById('nota-recebimento').value = '';
+  document.getElementById('nota-itens').innerHTML = '';
+  document.getElementById('nota-msg').innerHTML = '';
+  addLinhaNotaItem();
+  abrirModal('modal-nota');
+}
+
+function addLinhaNotaItem(){
+  const wrap = document.getElementById('nota-itens');
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  row.innerHTML = `
+    <div class="field"><label>Descrição (conforme nota)</label><input type="text" class="nota-desc"></div>
+    <div class="field"><label>Quantidade</label><input type="number" step="0.0001" class="nota-qtd qtd"></div>
+    <div class="field"><label>Valor unitário</label><input type="number" step="0.0001" class="nota-valor valor"></div>
+    <button class="link-plain" onclick="this.closest('.item-row').remove()">remover</button>`;
+  wrap.appendChild(row);
+}
+
+async function salvarNota(){
+  const msg = document.getElementById('nota-msg');
+  const fornecedor_id = document.getElementById('nota-fornecedor').value;
+  const numero = document.getElementById('nota-numero').value.trim();
+  const serie = document.getElementById('nota-serie').value.trim() || null;
+  const data_emissao = document.getElementById('nota-emissao').value || null;
+  const data_recebimento = document.getElementById('nota-recebimento').value || null;
+
+  if(!numero){ msg.innerHTML = '<div class="msg error">Informe o número da nota.</div>'; return; }
+
+  const linhas = [...document.querySelectorAll('#nota-itens .item-row')].map(row=>({
+    descricao_fornecedor: row.querySelector('.nota-desc').value.trim(),
+    quantidade: parseFloat(row.querySelector('.nota-qtd').value),
+    valor_unitario: parseFloat(row.querySelector('.nota-valor').value)
+  })).filter(i=>i.descricao_fornecedor && i.quantidade > 0 && i.valor_unitario >= 0);
+
+  if(!linhas.length){ msg.innerHTML = '<div class="msg error">Adicione ao menos um item válido.</div>'; return; }
+
+  const valor_total = linhas.reduce((s,l)=>s + l.quantidade*l.valor_unitario, 0);
+
+  const { data: nota, error } = await sb.from('notas_fiscais').insert({
+    empresa_id: empresaAtual, fornecedor_id: fornecedor_id || null, numero, serie,
+    data_emissao, data_recebimento, valor_total, status: 'lancada'
+  }).select().single();
+
+  if(error){ msg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+
+  const itens = linhas.map(l=>({ ...l, nota_id: nota.id }));
+  const { error: errItens } = await sb.from('notas_fiscais_itens').insert(itens);
+  if(errItens){ msg.innerHTML = `<div class="msg error">${errItens.message}</div>`; return; }
+
+  fecharModal('modal-nota');
+  carregarNotas();
+}
+
+/* ---------------- DETALHE DA NOTA: vínculo + processamento de entrada ---------------- */
+async function abrirDetalheNota(notaId){
+  document.getElementById('detalhe-nota-msg').innerHTML = '';
+  const { data: nota } = await sb.from('notas_fiscais').select('*, fornecedores(nome)').eq('id', notaId).single();
+  document.getElementById('detalhe-nota-titulo').textContent = `Nota ${nota.numero}${nota.serie ? '/'+nota.serie : ''} — ${nota.fornecedores?.nome || ''}`;
+
+  const { data: itens } = await sb.from('notas_fiscais_itens').select('*').eq('nota_id', notaId);
+  const { data: insumos } = await sb.from('insumos').select('id, descricao, codigo_interno').eq('ativo', true).order('descricao');
+  const { data: locais } = await sb.from('localizacoes_caminho').select('id, caminho').eq('empresa_id', empresaAtual);
+
+  const box = document.getElementById('detalhe-nota-itens');
+  box.innerHTML = itens.map(item => renderNotaItemBlock(item, insumos, locais, nota.fornecedor_id)).join('');
+  abrirModal('modal-detalhe-nota');
+}
+
+function renderNotaItemBlock(item, insumos, locais, fornecedor_id){
+  const insumoOptions = insumos.map(i=>`<option value="${i.id}" ${item.insumo_id===i.id?'selected':''}>${i.codigo_interno} — ${i.descricao}</option>`).join('');
+  const localOptions = locais.map(l=>`<option value="${l.id}" ${item.localizacao_destino_id===l.id?'selected':''}>${l.caminho}</option>`).join('');
+  const processado = item.processado;
+  return `
+    <div class="nota-item-block" data-item-id="${item.id}" data-fornecedor-id="${fornecedor_id||''}">
+      <div class="nota-item-top">
+        <span class="desc">${item.descricao_fornecedor}</span>
+        <span class="valores">${item.quantidade} × R$ ${Number(item.valor_unitario).toFixed(4)} = R$ ${Number(item.valor_total).toFixed(2)}</span>
+      </div>
+      ${processado
+        ? `<span class="badge processado">Entrada processada no estoque</span>`
+        : `<div class="nota-item-grid">
+            <div class="field"><label>Vincular ao insumo</label>
+              <select class="vinc-insumo"><option value="">Selecione…</option>${insumoOptions}</select>
+            </div>
+            <div class="field"><label>Localização de destino</label>
+              <select class="vinc-local"><option value="">Selecione…</option>${localOptions}</select>
+            </div>
+            <button class="btn small" onclick="processarEntradaItem('${item.id}', this)">Processar entrada</button>
+          </div>`
+      }
+    </div>`;
+}
+
+async function processarEntradaItem(itemId, btn){
+  const bloco = btn.closest('.nota-item-block');
+  const insumo_id = bloco.querySelector('.vinc-insumo').value;
+  const localizacao_destino_id = bloco.querySelector('.vinc-local').value;
+  const fornecedor_id = bloco.dataset.fornecedorId || null;
+  const msg = document.getElementById('detalhe-nota-msg');
+
+  if(!insumo_id || !localizacao_destino_id){
+    msg.innerHTML = '<div class="msg error">Selecione o insumo e a localização de destino antes de processar.</div>';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Processando…';
+
+  // 1. Grava o vínculo do item da nota (insumo + localização)
+  const { data: item, error: errUpd } = await sb.from('notas_fiscais_itens')
+    .update({ insumo_id, localizacao_destino_id })
+    .eq('id', itemId).select().single();
+
+  if(errUpd){ msg.innerHTML = `<div class="msg error">${errUpd.message}</div>`; btn.disabled=false; return; }
+
+  // 2. Memoriza o de-para fornecedor -> insumo para sugestão automática futura
+  if(fornecedor_id){
+    await sb.from('vinculo_insumo_fornecedor').upsert({
+      fornecedor_id, descricao_fornecedor: item.descricao_fornecedor, insumo_id
+    }, { onConflict: 'fornecedor_id,descricao_fornecedor' });
+  }
+
+  // 3. Chama a função de negócio que gera a entrada de estoque + custo médio
+  const { error: errRpc } = await sb.rpc('fn_processar_entrada_nota', {
+    p_nota_item_id: itemId, p_usuario_id: usuarioAtual.id
+  });
+
+  if(errRpc){ msg.innerHTML = `<div class="msg error">${errRpc.message}</div>`; btn.disabled=false; btn.textContent='Processar entrada'; return; }
+
+  bloco.innerHTML = `
+    <div class="nota-item-top">
+      <span class="desc">${item.descricao_fornecedor}</span>
+      <span class="valores">${item.quantidade} × R$ ${Number(item.valor_unitario).toFixed(4)}</span>
+    </div>
+    <span class="badge processado">Entrada processada no estoque</span>`;
+
+  carregarNotas();
+}
+
+/* ==========================================================================
+   SALDO DE ESTOQUE
+   ========================================================================== */
+async function carregarSaldo(){
+  const box = document.getElementById('tabela-saldo');
+  const busca = document.getElementById('busca-saldo')?.value?.trim() || '';
+
+  let query = sb.from('estoque_saldos')
+    .select('quantidade, insumos(codigo_interno, descricao, custo_medio, unidades_medida(sigla)), localizacoes_caminho(caminho)')
+    .eq('empresa_id', empresaAtual)
+    .gt('quantidade', 0);
+
+  const { data, error } = await query;
+  if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+
+  let linhas = data || [];
+  if(busca){
+    linhas = linhas.filter(l => l.insumos?.descricao?.toLowerCase().includes(busca.toLowerCase())
+                              || l.insumos?.codigo_interno?.toLowerCase().includes(busca.toLowerCase()));
+  }
+
+  if(!linhas.length){ box.innerHTML = '<div class="empty">Nenhum saldo encontrado.</div>'; return; }
+
+  box.innerHTML = `<table><thead><tr>
+    <th>Código</th><th>Insumo</th><th>Localização</th><th>Quantidade</th><th>Custo médio</th><th>Valor total</th>
+  </tr></thead><tbody>${linhas.map(l=>`
+    <tr>
+      <td class="mono">${l.insumos?.codigo_interno || '—'}</td>
+      <td>${l.insumos?.descricao || '—'}</td>
+      <td>${l.localizacoes_caminho?.caminho || '—'}</td>
+      <td class="mono">${Number(l.quantidade).toFixed(2)} ${l.insumos?.unidades_medida?.sigla || ''}</td>
+      <td class="mono">R$ ${Number(l.insumos?.custo_medio || 0).toFixed(4)}</td>
+      <td class="mono">R$ ${(l.quantidade * (l.insumos?.custo_medio || 0)).toFixed(2)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+/* ==========================================================================
+   ALERTA DE ESTOQUE MÍNIMO
+   ========================================================================== */
+async function carregarAlertas(){
+  const box = document.getElementById('tabela-alertas');
+  const { data, error } = await sb.from('vw_alerta_estoque_minimo').select('*');
+  if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+  if(!data.length){ box.innerHTML = '<div class="empty">Nenhum insumo abaixo do estoque mínimo. 👍</div>'; return; }
+
+  box.innerHTML = `<table><thead><tr>
+    <th>Código</th><th>Insumo</th><th>Saldo atual</th><th>Estoque mínimo</th>
+  </tr></thead><tbody>${data.map(a=>`
+    <tr>
+      <td class="mono">${a.codigo_interno}</td>
+      <td>${a.descricao}</td>
+      <td class="mono" style="color:var(--danger)">${Number(a.saldo_total).toFixed(2)}</td>
+      <td class="mono">${Number(a.estoque_minimo).toFixed(2)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+/* ==========================================================================
+   HELPER: preenche <select> a partir de uma tabela
+   ========================================================================== */
+async function preencherSelect(elementId, tabela, campoValor, campoLabel, filtro){
+  let query = sb.from(tabela).select(`${campoValor}, ${campoLabel}`);
+  if(filtro){ Object.entries(filtro).forEach(([k,v])=> query = query.eq(k, v)); }
+  const { data, error } = await query;
+  const el = document.getElementById(elementId);
+  if(error || !data){ el.innerHTML = '<option value="">(erro ao carregar)</option>'; return; }
+  el.innerHTML = '<option value="">Selecione…</option>' + data.map(d=>`<option value="${d[campoValor]}">${d[campoLabel]}</option>`).join('');
+}
+
+/* ---------------- boot: mantém sessão se já estiver logado ---------------- */
+(async ()=>{
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){
+    usuarioAtual = session.user;
+    await carregarContextoUsuario();
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('sidebar').style.display = 'flex';
+    document.getElementById('main').style.display = 'block';
+    carregarPedidos();
+  }
+})();
+</script>
+</body>
+</html>
