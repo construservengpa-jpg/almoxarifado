@@ -257,6 +257,8 @@
             <div class="field"><label>Unidade</label><select id="insumo-unidade"></select></div>
             <div class="field"><label>Estoque mínimo</label><input type="number" step="0.01" id="insumo-min"></div>
             <div class="field"><label>Código de barras</label><input id="insumo-barras"></div>
+            <div class="field"><label>Código de detalhe</label><input id="insumo-detalhe" placeholder="Preenchimento manual"></div>
+            <div class="field"><label>Marca</label><input id="insumo-marca" placeholder="Preenchimento manual"></div>
           </div>
           <button class="btn small" onclick="salvarInsumo()">Adicionar insumo</button>
         </div>
@@ -1021,16 +1023,37 @@ async function salvarFornecedor(){
 async function carregarInsumosConfig(){
   await preencherSelect('insumo-unidade', 'unidades_medida', 'id', 'sigla');
   const busca = document.getElementById('busca-insumo')?.value?.trim() || '';
-  let q = sb.from('insumos').select('codigo_interno, descricao, estoque_minimo, codigo_barras, unidades_medida(sigla)').order('descricao');
+  let q = sb.from('insumos').select('id, codigo_interno, descricao, estoque_minimo, codigo_barras, codigo_detalhe, marca, unidades_medida(sigla)').order('descricao');
   const { data } = await q;
   let linhas = data || [];
   if(busca) linhas = linhas.filter(i=> i.descricao.toLowerCase().includes(busca.toLowerCase()) || i.codigo_interno.toLowerCase().includes(busca.toLowerCase()));
-  document.getElementById('lista-insumos').innerHTML = renderTabelaSimples(linhas.map(i=>({
-    codigo: i.codigo_interno, descricao: i.descricao, unidade: i.unidades_medida?.sigla, minimo: i.estoque_minimo
-  })), [
-    { campo:'codigo', titulo:'Código' }, { campo:'descricao', titulo:'Descrição' }, { campo:'unidade', titulo:'Unidade' }, { campo:'minimo', titulo:'Estoque mínimo' }
-  ], 'Nenhum insumo cadastrado.');
+  const box = document.getElementById('lista-insumos');
+  if(!linhas.length){ box.innerHTML = '<div class="empty">Nenhum insumo cadastrado.</div>'; return; }
+  box.innerHTML = `<table><thead><tr>
+    <th>Código</th><th>Descrição</th><th>Unidade</th><th>Estoque mínimo</th><th>Código de detalhe</th><th>Marca</th><th></th>
+  </tr></thead><tbody>${linhas.map(i=>`
+    <tr data-insumo-id="${i.id}">
+      <td class="mono">${i.codigo_interno}</td>
+      <td>${i.descricao}</td>
+      <td>${i.unidades_medida?.sigla || '—'}</td>
+      <td class="mono">${i.estoque_minimo}</td>
+      <td><input class="insumo-detalhe-edit mono" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.codigo_detalhe || ''}" placeholder="—"></td>
+      <td><input class="insumo-marca-edit" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.marca || ''}" placeholder="—"></td>
+      <td><button class="btn small secondary" onclick="salvarDetalheMarcaInsumo('${i.id}', this)">Salvar</button></td>
+    </tr>`).join('')}</tbody></table>`;
 }
+
+async function salvarDetalheMarcaInsumo(id, btn){
+  const row = btn.closest('tr');
+  const codigo_detalhe = row.querySelector('.insumo-detalhe-edit').value.trim() || null;
+  const marca = row.querySelector('.insumo-marca-edit').value.trim() || null;
+  const { error } = await sb.from('insumos').update({ codigo_detalhe, marca }).eq('id', id);
+  if(error){ alert('Erro ao salvar: ' + error.message); return; }
+  const original = btn.textContent;
+  btn.textContent = 'Salvo!';
+  setTimeout(()=> btn.textContent = original, 1200);
+}
+
 async function salvarInsumo(){
   const msg = document.getElementById('insumos-msg');
   const codigo_interno = document.getElementById('insumo-codigo').value.trim();
@@ -1038,11 +1061,14 @@ async function salvarInsumo(){
   const unidade_id = document.getElementById('insumo-unidade').value;
   const estoque_minimo = parseFloat(document.getElementById('insumo-min').value) || 0;
   const codigo_barras = document.getElementById('insumo-barras').value.trim() || null;
+  const codigo_detalhe = document.getElementById('insumo-detalhe').value.trim() || null;
+  const marca = document.getElementById('insumo-marca').value.trim() || null;
   if(!codigo_interno || !descricao || !unidade_id){ msg.innerHTML = '<div class="msg error">Preencha código interno, descrição e unidade.</div>'; return; }
-  const { error } = await sb.from('insumos').insert({ codigo_interno, descricao, unidade_id, estoque_minimo, codigo_barras });
+  const { error } = await sb.from('insumos').insert({ codigo_interno, descricao, unidade_id, estoque_minimo, codigo_barras, codigo_detalhe, marca });
   msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Insumo cadastrado.</div>';
-  if(!error){ ['insumo-codigo','insumo-descricao','insumo-min','insumo-barras'].forEach(id=>document.getElementById(id).value=''); carregarInsumosConfig(); }
+  if(!error){ ['insumo-codigo','insumo-descricao','insumo-min','insumo-barras','insumo-detalhe','insumo-marca'].forEach(id=>document.getElementById(id).value=''); carregarInsumosConfig(); }
 }
+
 
 /* --- Estoques (nível raiz) e Endereços (dentro de um estoque) --- */
 async function preencherSelectsLocaisConfig(){
