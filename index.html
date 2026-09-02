@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
 <style>
   :root{
     --bg:#1A1D1F; --panel:#24282B; --panel-2:#2C3134; --line:#383D40;
@@ -147,6 +148,7 @@
       <button data-view="pedidos">Pedidos de Compra</button>
       <button data-view="notas">Notas Fiscais</button>
       <button data-view="saldo">Saldo de Estoque</button>
+      <button data-view="requisicoes">Requisições</button>
       <button data-view="alertas">Alerta de Mínimo</button>
       <button data-view="config">Configurações</button>
     </nav>
@@ -191,11 +193,21 @@
       <div id="tabela-saldo"><div class="empty">Carregando…</div></div>
     </div>
 
+    <!-- REQUISIÇÕES -->
+    <div class="view" id="view-requisicoes">
+      <div class="view-header">
+        <h2>Requisições</h2>
+        <button class="btn" onclick="abrirModalRequisicao()">Nova requisição</button>
+      </div>
+      <div id="tabela-requisicoes"><div class="empty">Carregando…</div></div>
+    </div>
+
     <!-- ALERTAS -->
     <div class="view" id="view-alertas">
       <div class="view-header"><h2>Insumos abaixo do estoque mínimo</h2></div>
       <div id="tabela-alertas"><div class="empty">Carregando…</div></div>
     </div>
+
 
     <!-- CONFIGURAÇÕES -->
     <div class="view" id="view-config">
@@ -330,9 +342,17 @@
 
 <!-- MODAL: NOVA NOTA FISCAL -->
 <div class="overlay" id="modal-nota">
-  <div class="modal">
+  <div class="modal wide">
     <h3>Nova nota fiscal</h3>
     <div id="nota-msg"></div>
+
+    <div class="pdf-drop">
+      <div style="margin-bottom:8px;">Tem o XML da NF-e ou o DANFE em PDF? Suba aqui pra preencher tudo automaticamente, inclusive o vínculo com o pedido de compra.</div>
+      <input type="file" id="xml-nota-input" accept=".xml,text/xml,application/xml,application/pdf" onchange="processarArquivoNota(event)">
+      <div id="xml-nota-status" style="margin-top:8px;font-size:12px;color:var(--text-dim);"></div>
+    </div>
+    <div id="xml-nota-preview"></div>
+
     <div class="row3">
       <div class="field"><label>Fornecedor</label><select id="nota-fornecedor"></select></div>
       <div class="field"><label>Número</label><input type="text" id="nota-numero"></div>
@@ -350,6 +370,7 @@
       <button class="btn" onclick="salvarNota()">Salvar nota</button>
     </div>
   </div>
+
 </div>
 
 <!-- MODAL: DETALHE DA NOTA (vínculo + entrada) -->
@@ -361,6 +382,48 @@
     <div class="modal-actions">
       <button class="btn secondary" onclick="fecharModal('modal-detalhe-nota')">Fechar</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL: NOVA REQUISIÇÃO ELETRÔNICA -->
+<div class="overlay" id="modal-requisicao">
+  <div class="modal wide">
+    <h3>Nova requisição</h3>
+    <div id="requisicao-msg"></div>
+
+    <div class="row3">
+      <div class="field"><label>Data</label><input type="date" id="req-data"></div>
+      <div class="field"><label>Requisitante</label><input type="text" id="req-requisitante"></div>
+      <div class="field"><label>Localização de origem</label><select id="req-localizacao"></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Ordem de serviço (aplicação, se houver)</label><select id="req-os"><option value="">— nenhuma —</option></select></div>
+      <div class="field"><label>Equipamento (aplicação, se houver)</label><select id="req-equipamento"><option value="">— nenhum —</option></select></div>
+    </div>
+
+    <label style="font-size:12px;color:var(--text-dim);">Itens (leia o código de barras com leitor físico ou pela câmera)</label>
+    <div id="req-itens" style="margin-top:8px;"></div>
+    <button class="btn secondary small" onclick="addLinhaRequisicaoItem()">+ Adicionar item</button>
+
+    <label style="font-size:12px;color:var(--text-dim);display:block;margin-top:18px;">Assinatura do requisitante</label>
+    <div style="border:1px solid var(--line);border-radius:var(--radius);background:#fff;margin-top:6px;">
+      <canvas id="req-assinatura-canvas" width="700" height="150" style="width:100%;height:150px;display:block;touch-action:none;cursor:crosshair;"></canvas>
+    </div>
+    <button class="btn secondary small" style="margin-top:6px;" onclick="limparAssinatura()">Limpar assinatura</button>
+
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="fecharModal('modal-requisicao')">Cancelar</button>
+      <button class="btn" onclick="finalizarRequisicao()">Finalizar requisição (dá baixa no estoque)</button>
+    </div>
+  </div>
+</div>
+
+<!-- OVERLAY: LEITURA DE CÓDIGO DE BARRAS PELA CÂMERA -->
+<div class="overlay" id="camera-overlay">
+  <div class="modal" style="width:420px;text-align:center;">
+    <h3>Aponte a câmera para o código de barras</h3>
+    <video id="camera-video" style="width:100%;border-radius:var(--radius);background:#000;margin:12px 0;"></video>
+    <button class="btn secondary" onclick="pararLeituraCamera()">Cancelar leitura</button>
   </div>
 </div>
 
@@ -417,6 +480,7 @@ document.querySelectorAll('#sidebar nav button').forEach(btn=>{
     if(v==='pedidos') carregarPedidos();
     if(v==='notas') carregarNotas();
     if(v==='saldo') carregarSaldo();
+    if(v==='requisicoes') carregarRequisicoes();
     if(v==='alertas') carregarAlertas();
     if(v==='config') carregarConfigTudo();
   });
@@ -431,6 +495,10 @@ document.querySelectorAll('.subtabs button').forEach(btn=>{
     document.getElementById('sub-'+btn.dataset.sub).classList.add('active');
   });
 });
+
+function formatarCodigoInsumo(i){
+  return [i.codigo_interno, i.codigo_detalhe, i.marca].filter(Boolean).join('/');
+}
 
 function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
 function abrirModal(id){ document.getElementById(id).classList.add('open'); }
@@ -498,7 +566,10 @@ async function carregarPedidos(){
     <td class="mono">${p.data_pedido}</td><td><span class="badge ${p.status}">${p.status}</span></td></tr>`).join('')}</tbody></table>`;
 }
 
+let empresaAlvoPedido = null;
+
 async function abrirModalPedido(){
+  empresaAlvoPedido = empresaAtual;
   await preencherSelect('pedido-cc', 'centros_custo', 'id', 'nome', { empresa_id: empresaAtual });
   const { data: fornecedoresDisponiveis } = await sb.from('fornecedores').select('id, nome, cnpj').order('nome');
   const selFornecedor = document.getElementById('pedido-fornecedor');
@@ -524,9 +595,9 @@ async function addLinhaPedidoItem(valores){
     <div class="field"><label>Preço estimado</label><input type="number" step="0.01" class="pedido-preco valor" value="${valores?.preco ?? ''}"></div>
     <button class="link-plain" onclick="this.closest('.item-row').remove()">remover</button>`;
   wrap.appendChild(row);
-  const { data: insumosDisponiveis } = await sb.from('insumos').select('id, codigo_interno, descricao').eq('ativo', true).order('descricao');
+  const { data: insumosDisponiveis } = await sb.from('insumos').select('id, codigo_interno, codigo_detalhe, marca, descricao').eq('ativo', true).order('descricao');
   const sel = document.getElementById(selId);
-  sel.innerHTML = '<option value="">Selecione…</option>' + (insumosDisponiveis||[]).map(i=>`<option value="${i.id}">${i.codigo_interno} — ${i.descricao}</option>`).join('');
+  sel.innerHTML = '<option value="">Selecione…</option>' + (insumosDisponiveis||[]).map(i=>`<option value="${i.id}">${formatarCodigoInsumo(i)} — ${i.descricao}</option>`).join('');
   if(valores?.insumoIdSugerido && [...sel.options].some(o => o.value === valores.insumoIdSugerido)){
     sel.value = valores.insumoIdSugerido;
   } else if(valores?.codigoSugerido){
@@ -556,7 +627,7 @@ async function salvarPedido(){
   })).filter(i=>i.insumo_id && i.quantidade > 0);
   if(!linhas.length){ msg.innerHTML = '<div class="msg error">Adicione ao menos um item válido (verifique se o insumo foi selecionado).</div>'; return; }
   const { data: pedido, error } = await sb.from('pedidos_compra').insert({
-    empresa_id: empresaAtual, centro_custo_id, fornecedor_id: fornecedor_id || null,
+    empresa_id: empresaAlvoPedido || empresaAtual, centro_custo_id, fornecedor_id: fornecedor_id || null,
     numero, solicitante_id: usuarioAtual.id, status: 'enviado'
   }).select().single();
   if(error){ msg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
@@ -602,7 +673,7 @@ async function extrairTextoPdf(file){
 }
 
 function extrairCabecalhoPedido(linhas){
-  let numero = null, fornecedorNome = null, fornecedorCnpj = null, obraNome = null;
+  let numero = null, fornecedorNome = null, fornecedorCnpj = null, obraNome = null, empresaNome = null, empresaCnpj = null;
   const reNumeroAntes = /(\d{3,})\s*\d{1,2}\/\d{1,2}\/\d{4}/;    // ex: "57585 31/08/2026Nº Pedido..."
   const reNumeroDepois = /N[ºo]\.?\s*Pedido\s*(\d+)/i;            // ex: "Nº Pedido57585..."
   for(const l of linhas){
@@ -611,6 +682,14 @@ function extrairCabecalhoPedido(linhas){
     if(m){ numero = m[1]; break; }
     m = l.match(reNumeroDepois);
     if(m){ numero = m[1]; break; }
+  }
+  // Empresa compradora (quem vai receber o pedido no estoque) — seção "Dados do faturamento"
+  const idxFaturamento = linhas.findIndex(l => /Dados do faturamento/i.test(l));
+  if(idxFaturamento >= 0){
+    for(let i = idxFaturamento; i < Math.min(idxFaturamento + 4, linhas.length); i++){
+      const m = linhas[i].match(/^\s*(.+?)\s*CNPJ\s*([\d.\/-]+)/i);
+      if(m){ empresaNome = m[1].trim(); empresaCnpj = m[2].replace(/\D/g,''); break; }
+    }
   }
   const idxFornecedor = linhas.findIndex(l => /Dados do fornecedor/i.test(l));
   if(idxFornecedor >= 0){
@@ -622,10 +701,14 @@ function extrairCabecalhoPedido(linhas){
   const idxObra = linhas.findIndex(l => /Dados da obra/i.test(l));
   if(idxObra >= 0 && linhas[idxObra + 1]){
     const m = linhas[idxObra + 1].match(/^(.*?)\s*Ponto de ref\.?/i);
-    obraNome = (m ? m[1] : linhas[idxObra + 1]).trim();
-    if(!obraNome) obraNome = null;
+    let base = (m ? m[1] : linhas[idxObra + 1]).trim();
+    const proxima = linhas[idxObra + 2];
+    if(proxima && proxima.trim().length > 0 && proxima.trim().length < 40 && !/Insumo|Cond\.|pagamento|Qtde/i.test(proxima)){
+      base = (base + ' ' + proxima.trim()).trim();
+    }
+    obraNome = base || null;
   }
-  return { numero, fornecedorNome, fornecedorCnpj, obraNome };
+  return { numero, fornecedorNome, fornecedorCnpj, obraNome, empresaNome, empresaCnpj };
 }
 
 function formatarCnpj(digits){
@@ -645,14 +728,53 @@ async function buscarOuCriarFornecedor(nome, cnpjDigits){
   return { id: novo.id, nome: novo.nome, criado: true };
 }
 
-async function buscarOuCriarCentroCusto(nomeObra){
-  if(!nomeObra) return null;
-  const { data: existente } = await sb.from('centros_custo').select('id, nome')
-    .eq('empresa_id', empresaAtual).ilike('nome', nomeObra).maybeSingle();
-  if(existente) return { id: existente.id, nome: existente.nome, criado: false };
+function normalizarTexto(s){
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+}
+function similaridadeTexto(a, b){
+  const tokensA = new Set(normalizarTexto(a).split(' ').filter(Boolean));
+  const tokensB = new Set(normalizarTexto(b).split(' ').filter(Boolean));
+  if(!tokensA.size || !tokensB.size) return 0;
+  const inter = [...tokensA].filter(t => tokensB.has(t)).length;
+  const uniao = new Set([...tokensA, ...tokensB]).size;
+  return inter / uniao;
+}
+
+async function resolverEmpresaDoDocumento(cnpjDigits){
+  if(!cnpjDigits) return null;
+  const { data } = await sb.from('empresas').select('id, razao_social, cnpj').eq('cnpj', formatarCnpj(cnpjDigits)).maybeSingle();
+  return data || null;
+}
+
+async function buscarOuCriarCentroCusto(nomeObra, empresaId){
+  if(!nomeObra || !empresaId) return null;
+  const { data: existentes } = await sb.from('centros_custo').select('id, nome').eq('empresa_id', empresaId);
+  const lista = existentes || [];
+
+  // 1. match exato (ignorando maiúsculas, acentos e espaçamento)
+  const alvoNorm = normalizarTexto(nomeObra);
+  const exato = lista.find(c => normalizarTexto(c.nome) === alvoNorm);
+  if(exato) return { id: exato.id, nome: exato.nome, criado: false };
+
+  // 2. procura o mais parecido; se achar algo relevante, pergunta antes de criar
+  let melhor = null, melhorScore = 0;
+  for(const c of lista){
+    const score = similaridadeTexto(nomeObra, c.nome);
+    if(score > melhorScore){ melhorScore = score; melhor = c; }
+  }
+  if(melhor && melhorScore >= 0.4){
+    const usarExistente = confirm(
+      `Já existe um centro de custo parecido:\n"${melhor.nome}"\n\n` +
+      `O PDF trouxe:\n"${nomeObra}"\n\n` +
+      `Clique OK para usar o já cadastrado, ou Cancelar para criar um novo centro de custo.`
+    );
+    if(usarExistente) return { id: melhor.id, nome: melhor.nome, criado: false };
+  }
+
+  // 3. cria novo
   const codigo = nomeObra.toUpperCase().replace(/[^A-Z0-9]+/g,'-').slice(0,30) || ('OBRA-' + Date.now());
   const { data: novo, error } = await sb.from('centros_custo').insert({
-    empresa_id: empresaAtual, codigo, nome: nomeObra
+    empresa_id: empresaId, codigo, nome: nomeObra
   }).select().single();
   if(error) throw new Error('centro de custo: ' + error.message);
   return { id: novo.id, nome: novo.nome, criado: true };
@@ -681,15 +803,21 @@ async function buscarOuCriarInsumo(codigo, descricao, unidadeSigla){
 
 function parseLinhasPedido(linhas){
   const itens = [];
-  // Formato Sienge/Starian: "CODIGO - DESCRICAO  QTDE+UNIDADE  PR.UNIT  DESCONTO  %DESC  %IPI  %ACRESC  PRECO_FINAL"
-  // ex: "15110 - MALETA PARA KIT PRIMEIROS SOCORROS 2,0000un 125,0000 0,00 0,00 0,00 0,00 250,00"
-  const RE_SIENGE = /^(\d+)\s*-\s*(.+?)(\d+(?:[.,]\d+)?)\s*([A-Za-zÀ-ÿ²³]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
+  // Formato Sienge/Starian: "CODIGO - DESCRICAO  QTDE+UNIDADE  PR.UNIT  [demais colunas...]"
+  // Exige só até o preço unitário — o resto das colunas (desconto, %ipi etc.) é ignorado e
+  // não precisa estar todo na mesma linha, o que torna o reconhecimento resistente a PDFs
+  // onde a linha do item quebra de um jeito diferente.
+  const RE_SIENGE = /^(\d+)\s*-\s*(.+?)([\d.,]+)\s*([A-Za-zÀ-ÿ²³]{1,4})\s+([\d.,]+)/;
   // Fallback genérico: "DESCRICAO  QTDE  VALOR[  VALOR2]" — usado quando o layout não é o do Sienge
   const RE_GENERICO = /([\d.,]+)\s+([\d.,]+)(?:\s+([\d.,]+))?\s*$/;
+  // Linhas que claramente não são continuação de descrição (fim da tabela de itens)
+  const RE_FIM_ITEM = /Cond\.\s*pagamento|Datas de (entrega|vencimento)|Observa[çc][õo]es|TOTAL DO PEDIDO|Ficha de Verifica[çc][ãa]o|Condi[çc][õo]es Gerais/i;
 
-  linhas.forEach(linha=>{
+  let ultimoIdxUsado = -1;
+
+  linhas.forEach((linha, idx)=>{
     const l = linha.trim();
-    if(l.length < 5) return;
+    if(l.length < 3) return;
 
     const m = l.match(RE_SIENGE);
     if(m){
@@ -697,6 +825,19 @@ function parseLinhasPedido(linhas){
       const valor = parseNumeroBR(m[5]);
       if(isNaN(qtd) || isNaN(valor) || qtd <= 0) return;
       itens.push({ codigo: m[1].trim(), descricao: m[2].trim(), quantidade: qtd, unidade: m[4], valor_unitario: valor });
+      ultimoIdxUsado = idx;
+      return;
+    }
+
+    // ignora silenciosamente linhas que são só números (sobra de colunas de valor
+    // por causa de uma quebra de linha) — sem contar como quebra da continuidade
+    if(/^[\d.,\s]+$/.test(l)) return;
+
+    // linha de continuação: junta à descrição do último item, tolerando até uma
+    // linha de números ignorada no meio do caminho
+    if(itens.length && idx <= ultimoIdxUsado + 2 && l.length < 70 && !RE_FIM_ITEM.test(l)){
+      itens[itens.length - 1].descricao += ' ' + l;
+      ultimoIdxUsado = idx;
       return;
     }
 
@@ -708,6 +849,7 @@ function parseLinhasPedido(linhas){
     const valor = parseNumeroBR(m2[2]);
     if(isNaN(qtd) || isNaN(valor) || qtd <= 0) return;
     itens.push({ codigo: null, descricao, quantidade: qtd, valor_unitario: valor });
+    ultimoIdxUsado = idx;
   });
   return itens;
 }
@@ -731,6 +873,21 @@ async function processarPdfPedido(ev){
       avisos.push(`número do pedido preenchido (${cabecalho.numero})`);
     }
 
+    // Resolve a empresa compradora pelo CNPJ do documento — não assume a empresa selecionada
+    empresaAlvoPedido = empresaAtual;
+    if(cabecalho.empresaCnpj){
+      const empresaDoc = await resolverEmpresaDoDocumento(cabecalho.empresaCnpj);
+      if(empresaDoc){
+        empresaAlvoPedido = empresaDoc.id;
+        if(empresaDoc.id !== empresaAtual){
+          avisos.push(`⚠ este pedido é da empresa "${empresaDoc.razao_social}" — será salvo nela, não na empresa selecionada atualmente`);
+          await preencherSelect('pedido-cc', 'centros_custo', 'id', 'nome', { empresa_id: empresaAlvoPedido });
+        }
+      } else {
+        avisos.push(`⚠ o CNPJ da empresa compradora neste PDF (${formatarCnpj(cabecalho.empresaCnpj)}${cabecalho.empresaNome ? ' — ' + cabecalho.empresaNome : ''}) não está cadastrado no sistema — usando a empresa selecionada atualmente; cadastre essa empresa em Configurações se for o caso`);
+      }
+    }
+
     if(cabecalho.fornecedorCnpj){
       const fornecedor = await buscarOuCriarFornecedor(cabecalho.fornecedorNome, cabecalho.fornecedorCnpj);
       if(fornecedor){
@@ -744,7 +901,7 @@ async function processarPdfPedido(ev){
     }
 
     if(cabecalho.obraNome){
-      const centro = await buscarOuCriarCentroCusto(cabecalho.obraNome);
+      const centro = await buscarOuCriarCentroCusto(cabecalho.obraNome, empresaAlvoPedido);
       if(centro){
         const selCc = document.getElementById('pedido-cc');
         if(![...selCc.options].some(o => o.value === centro.id)){
@@ -822,7 +979,10 @@ async function carregarNotas(){
     <td><button class="btn small secondary" onclick="abrirDetalheNota('${n.id}')">Vincular / Processar</button></td></tr>`).join('')}</tbody></table>`;
 }
 
+let empresaAlvoNota = null;
+
 async function abrirModalNota(){
+  empresaAlvoNota = empresaAtual;
   await preencherSelect('nota-fornecedor', 'fornecedores', 'id', 'nome');
   document.getElementById('nota-numero').value = '';
   document.getElementById('nota-serie').value = '';
@@ -830,20 +990,31 @@ async function abrirModalNota(){
   document.getElementById('nota-recebimento').value = '';
   document.getElementById('nota-itens').innerHTML = '';
   document.getElementById('nota-msg').innerHTML = '';
+  document.getElementById('xml-nota-status').innerHTML = '';
+  document.getElementById('xml-nota-preview').innerHTML = '';
+  document.getElementById('xml-nota-input').value = '';
   addLinhaNotaItem();
   abrirModal('modal-nota');
 }
 
-function addLinhaNotaItem(){
+function addLinhaNotaItem(valores){
   const wrap = document.getElementById('nota-itens');
   const row = document.createElement('div');
   row.className = 'item-row';
+  if(valores?.insumoId) row.dataset.insumoId = valores.insumoId;
+  if(valores?.pedidoItemId) row.dataset.pedidoItemId = valores.pedidoItemId;
   row.innerHTML = `
-    <div class="field"><label>Descrição (conforme nota)</label><input type="text" class="nota-desc"></div>
-    <div class="field"><label>Quantidade</label><input type="number" step="0.0001" class="nota-qtd qtd"></div>
-    <div class="field"><label>Valor unitário</label><input type="number" step="0.0001" class="nota-valor valor"></div>
+    <div class="field"><label>Descrição (conforme nota)</label><input type="text" class="nota-desc" value="${valores?.descricao ? valores.descricao.replace(/"/g,'&quot;') : ''}"></div>
+    <div class="field"><label>Quantidade</label><input type="number" step="0.0001" class="nota-qtd qtd" value="${valores?.quantidade ?? ''}"></div>
+    <div class="field"><label>Valor unitário</label><input type="number" step="0.0001" class="nota-valor valor" value="${valores?.valorUnitario ?? ''}"></div>
     <button class="link-plain" onclick="this.closest('.item-row').remove()">remover</button>`;
   wrap.appendChild(row);
+  if(valores?.insumoId){
+    const nota = document.createElement('div');
+    nota.style.cssText = 'font-size:11px;color:var(--ok);margin:-4px 0 8px 2px;';
+    nota.textContent = `✓ vinculado automaticamente ao insumo do pedido${valores.numeroPedido ? ' nº ' + valores.numeroPedido : ''}`;
+    wrap.appendChild(nota);
+  }
 }
 
 async function salvarNota(){
@@ -857,12 +1028,14 @@ async function salvarNota(){
   const linhas = [...document.querySelectorAll('#nota-itens .item-row')].map(row=>({
     descricao_fornecedor: row.querySelector('.nota-desc').value.trim(),
     quantidade: parseFloat(row.querySelector('.nota-qtd').value),
-    valor_unitario: parseFloat(row.querySelector('.nota-valor').value)
+    valor_unitario: parseFloat(row.querySelector('.nota-valor').value),
+    insumo_id: row.dataset.insumoId || null,
+    pedido_item_id: row.dataset.pedidoItemId || null
   })).filter(i=>i.descricao_fornecedor && i.quantidade > 0 && i.valor_unitario >= 0);
   if(!linhas.length){ msg.innerHTML = '<div class="msg error">Adicione ao menos um item válido.</div>'; return; }
   const valor_total = linhas.reduce((s,l)=>s + l.quantidade*l.valor_unitario, 0);
   const { data: nota, error } = await sb.from('notas_fiscais').insert({
-    empresa_id: empresaAtual, fornecedor_id: fornecedor_id || null, numero, serie,
+    empresa_id: empresaAlvoNota || empresaAtual, fornecedor_id: fornecedor_id || null, numero, serie,
     data_emissao, data_recebimento, valor_total, status: 'lancada'
   }).select().single();
   if(error){ msg.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
@@ -873,12 +1046,259 @@ async function salvarNota(){
   carregarNotas();
 }
 
+/* ==========================================================================
+   IMPORTAÇÃO DO XML DA NF-E + VÍNCULO AUTOMÁTICO COM O PEDIDO DE COMPRA
+   ========================================================================== */
+async function extrairXmlNota(file){
+  const texto = await file.text();
+  const doc = new DOMParser().parseFromString(texto, 'application/xml');
+  if(doc.querySelector('parsererror')) throw new Error('XML inválido ou corrompido.');
+
+  const infNFe = doc.querySelector('infNFe');
+  if(!infNFe) throw new Error('Não encontrei os dados da NF-e neste arquivo (tag infNFe ausente) — confirme se é o XML da nota, não o DANFE em PDF.');
+
+  const texto1 = (root, tag) => root?.querySelector(tag)?.textContent?.trim() || null;
+  const ide = infNFe.querySelector('ide');
+  const emit = infNFe.querySelector('emit');
+  const dest = infNFe.querySelector('dest');
+  const total = infNFe.querySelector('total');
+
+  const idAttr = infNFe.getAttribute('Id') || infNFe.getAttribute('id') || '';
+  const chaveAcesso = texto1(doc, 'protNFe infProt chNFe') || idAttr.replace(/^NFe/i, '') || null;
+
+  const numero = texto1(ide, 'nNF');
+  const serie = texto1(ide, 'serie');
+  const dhEmi = texto1(ide, 'dhEmi') || texto1(ide, 'dEmi');
+  const dataEmissao = dhEmi ? dhEmi.slice(0, 10) : null;
+
+  const fornecedorCnpj = (texto1(emit, 'CNPJ') || '').replace(/\D/g, '') || null;
+  const fornecedorNome = texto1(emit, 'xNome');
+  const empresaCnpj = (texto1(dest, 'CNPJ') || '').replace(/\D/g, '') || null;
+  const empresaNome = texto1(dest, 'xNome');
+  const valorTotal = parseFloat(texto1(total, 'vNF')) || null;
+
+  const itens = [...infNFe.querySelectorAll('det')].map(det => {
+    const prod = det.querySelector('prod');
+    return {
+      codigoFornecedor: texto1(prod, 'cProd'),
+      descricao: texto1(prod, 'xProd'),
+      quantidade: parseFloat(texto1(prod, 'qCom')) || 0,
+      valorUnitario: parseFloat(texto1(prod, 'vUnCom')) || 0
+    };
+  }).filter(i => i.descricao && i.quantidade > 0);
+
+  return { numero, serie, dataEmissao, chaveAcesso, fornecedorCnpj, fornecedorNome, empresaCnpj, empresaNome, valorTotal, itens };
+}
+
+/* Procura, dentre os pedidos de compra em aberto do mesmo fornecedor NA MESMA EMPRESA, o item
+   que melhor corresponde ao item da nota — por código do fornecedor, similaridade de descrição
+   e quantidade pendente. Se achar, o insumo do PEDIDO é o que será usado no estoque. */
+async function buscarInsumoPedidoCorrespondente(fornecedorId, item, empresaId){
+  if(!fornecedorId || !empresaId) return null;
+  const { data: itensPedido } = await sb.from('pedidos_compra_itens')
+    .select('id, quantidade, quantidade_atendida, insumo_id, insumos(codigo_interno, descricao), pedidos_compra!inner(numero, fornecedor_id, empresa_id, status)')
+    .eq('pedidos_compra.fornecedor_id', fornecedorId)
+    .eq('pedidos_compra.empresa_id', empresaId)
+    .in('pedidos_compra.status', ['enviado', 'parcial']);
+
+  if(!itensPedido || !itensPedido.length) return null;
+
+  let melhor = null, melhorScore = 0;
+  for(const pi of itensPedido){
+    const pendente = pi.quantidade - (pi.quantidade_atendida || 0);
+    if(pendente <= 0) continue;
+    let score = 0;
+    if(item.codigoFornecedor && pi.insumos?.codigo_interno && item.codigoFornecedor.trim() === pi.insumos.codigo_interno.trim()) score += 0.6;
+    score += similaridadeTexto(item.descricao, pi.insumos?.descricao || '') * 0.3;
+    if(Math.abs(pendente - item.quantidade) < 0.001) score += 0.2;
+    if(score > melhorScore){ melhorScore = score; melhor = pi; }
+  }
+  if(melhor && melhorScore >= 0.4){
+    return {
+      pedidoItemId: melhor.id, insumoId: melhor.insumo_id,
+      insumoDescricao: melhor.insumos?.descricao, numeroPedido: melhor.pedidos_compra?.numero
+    };
+  }
+  return null;
+}
+
+/* ---- Reconhecedor do DANFE (PDF) — layout padrão nacional da NF-e impressa ---- */
+async function extrairDanfePdf(file){
+  const linhas = await extrairTextoPdf(file);
+
+  let numero = null, serie = null, chaveAcesso = null, fornecedorNome = null, fornecedorCnpj = null, dataEmissao = null, valorTotal = null, empresaNome = null, empresaCnpj = null;
+
+  for(const l of linhas){ const m = l.match(/N[ºo]\.?\s*(\d{3,})/); if(m){ numero = m[1]; break; } }
+  for(const l of linhas){ const m = l.match(/S[ÉE]RIE:?\s*(\d+)/i); if(m){ serie = m[1]; break; } }
+  for(const l of linhas){ const m = l.match(/(\d{4}(?:\s+\d{4}){10})/); if(m){ chaveAcesso = m[1].replace(/\s+/g,''); break; } }
+
+  const recebemos = linhas.find(l => /^RECEBEMOS\s+DE/i.test(l));
+  if(recebemos){
+    const m = recebemos.match(/^RECEBEMOS\s+DE\s+(.+?)\.\s*OS\s+PRODUTOS/i);
+    if(m) fornecedorNome = m[1].trim();
+  }
+
+  const idxDestinatario = linhas.findIndex(l => /DESTINAT[ÁA]RIO/i.test(l));
+  const limite = idxDestinatario >= 0 ? idxDestinatario : linhas.length;
+  for(let i = 0; i < limite; i++){
+    const m = linhas[i].match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/);
+    if(m){ fornecedorCnpj = m[1].replace(/\D/g,''); break; }
+  }
+
+  // Empresa compradora (destinatário) — o CNPJ que vem logo após a seção DESTINATÁRIO
+  if(idxDestinatario >= 0){
+    const idxLocalEntrega = linhas.findIndex((l,i) => i > idxDestinatario && /INFORMA[ÇC][ÕO]ES DO LOCAL DE ENTREGA/i.test(l));
+    const limiteEmpresa = idxLocalEntrega > 0 ? idxLocalEntrega : Math.min(idxDestinatario + 10, linhas.length);
+    for(let i = idxDestinatario; i < limiteEmpresa; i++){
+      const m = linhas[i].match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/);
+      if(m){
+        empresaCnpj = m[1].replace(/\D/g,'');
+        const antes = linhas[i].slice(0, linhas[i].indexOf(m[1])).trim();
+        empresaNome = antes || (linhas[i-1] ? linhas[i-1].trim() : null);
+        break;
+      }
+    }
+  }
+
+  if(idxDestinatario >= 0){
+    for(let i = idxDestinatario; i < Math.min(idxDestinatario + 6, linhas.length); i++){
+      const m = linhas[i].match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if(m){ dataEmissao = `${m[3]}-${m[2]}-${m[1]}`; break; }
+    }
+  }
+
+  const idxValorTotalHeader = linhas.findIndex(l => /VALOR TOTAL DA NOTA/i.test(l));
+  if(idxValorTotalHeader >= 0 && linhas[idxValorTotalHeader + 1]){
+    const nums = linhas[idxValorTotalHeader + 1].match(/[\d.,]+/g);
+    if(nums && nums.length) valorTotal = parseNumeroBR(nums[nums.length - 1]);
+  }
+
+  // Itens: bloco entre "DADOS DOS PRODUTOS" e a próxima seção (ISSQN / dados adicionais)
+  const inicio = linhas.findIndex(l => /DADOS DOS PRODUTOS/i.test(l));
+  const itens = [];
+  if(inicio >= 0){
+    let fim = linhas.findIndex((l, i) => i > inicio && /DADOS ADICIONAIS|C[ÁA]LCULO DO ISSQN|INFORMA[ÇC][ÕO]ES COMPLEMENTARES/i.test(l));
+    if(fim < 0) fim = linhas.length;
+    const RE_ITEM = /^(\d{2,})\s+(\d{6,8})\s+(\d{2,3})\s+(\d{3,4})\s+([A-Za-zÀ-ÿ]{1,4})\s+([\d.,]+)\s+([\d.,]+)/;
+    const ignorarPadrao = /COD\.?PROD|DESCRI[ÇC][ÃA]ODOSPRODUTOS|AL[ÍI]QUOTAS|ICMSIPI|DADOSDOSPRODUTOS|VALORUNIT[ÁA]RIO/i;
+    let descricaoAcumulada = [];
+    for(let i = inicio + 1; i < fim; i++){
+      const linha = linhas[i].trim();
+      if(!linha) continue;
+      const m = linha.match(RE_ITEM);
+      if(m){
+        const descricao = descricaoAcumulada.join(' ').replace(/\s{2,}/g,' ').trim();
+        descricaoAcumulada = [];
+        const qtd = parseNumeroBR(m[6]);
+        const valorUnitario = parseNumeroBR(m[7]);
+        if(descricao && qtd > 0){
+          itens.push({ codigoFornecedor: m[1], descricao, quantidade: qtd, valorUnitario });
+        }
+        continue;
+      }
+      if(!ignorarPadrao.test(linha.replace(/\s+/g,''))) descricaoAcumulada.push(linha);
+    }
+  }
+
+  return { numero, serie, dataEmissao, chaveAcesso, fornecedorCnpj, fornecedorNome, empresaCnpj, empresaNome, valorTotal, itens };
+}
+
+/* ---- Roteador: decide se o arquivo subido é XML ou PDF (DANFE) ---- */
+async function processarArquivoNota(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const ehPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  const nfe = ehPdf ? await extrairDanfePdf(file) : await extrairXmlNota(file);
+  await aplicarDadosNota(nfe, ehPdf);
+}
+
+async function aplicarDadosNota(nfe, viaPdf){
+  const status = document.getElementById('xml-nota-status');
+  const preview = document.getElementById('xml-nota-preview');
+  status.textContent = viaPdf ? 'Lendo PDF (DANFE)…' : 'Lendo XML…';
+  preview.innerHTML = '';
+  try{
+    document.getElementById('nota-numero').value = nfe.numero || '';
+    document.getElementById('nota-serie').value = nfe.serie || '';
+    document.getElementById('nota-emissao').value = nfe.dataEmissao || '';
+
+    const avisos = [];
+
+    // Resolve a empresa compradora pelo CNPJ do documento — não assume a empresa selecionada
+    empresaAlvoNota = empresaAtual;
+    if(nfe.empresaCnpj){
+      const empresaDoc = await resolverEmpresaDoDocumento(nfe.empresaCnpj);
+      if(empresaDoc){
+        empresaAlvoNota = empresaDoc.id;
+        if(empresaDoc.id !== empresaAtual){
+          avisos.push(`⚠ esta nota é da empresa "${empresaDoc.razao_social}" — será salva nela, não na empresa selecionada atualmente`);
+        }
+      } else {
+        avisos.push(`⚠ o CNPJ da empresa compradora nesta nota (${formatarCnpj(nfe.empresaCnpj)}${nfe.empresaNome ? ' — ' + nfe.empresaNome : ''}) não está cadastrado no sistema — usando a empresa selecionada atualmente; cadastre essa empresa em Configurações se for o caso`);
+      }
+    }
+
+    let fornecedorInfo = null;
+    if(nfe.fornecedorCnpj){
+      fornecedorInfo = await buscarOuCriarFornecedor(nfe.fornecedorNome, nfe.fornecedorCnpj);
+      const sel = document.getElementById('nota-fornecedor');
+      if(fornecedorInfo && ![...sel.options].some(o => o.value === fornecedorInfo.id)){
+        sel.innerHTML += `<option value="${fornecedorInfo.id}">${fornecedorInfo.nome}</option>`;
+      }
+      if(fornecedorInfo) sel.value = fornecedorInfo.id;
+    }
+
+    const itensComMatch = [];
+    for(const item of nfe.itens){
+      const match = fornecedorInfo ? await buscarInsumoPedidoCorrespondente(fornecedorInfo.id, item, empresaAlvoNota) : null;
+      itensComMatch.push({ ...item, match });
+    }
+
+    const qtdVinculados = itensComMatch.filter(i => i.match).length;
+    if(fornecedorInfo) avisos.push(fornecedorInfo.criado ? `fornecedor "${fornecedorInfo.nome}" cadastrado automaticamente` : `fornecedor identificado (${fornecedorInfo.nome})`);
+    if(qtdVinculados) avisos.push(`${qtdVinculados} de ${itensComMatch.length} item(ns) já vinculado(s) ao insumo do pedido de compra correspondente`);
+
+    status.innerHTML = [`${itensComMatch.length} item(ns) lido(s) do XML.`, ...avisos].join(' — ');
+
+    preview.innerHTML = `<label style="font-size:12px;color:var(--text-dim);">Itens da nota (revise antes de usar)</label>` +
+      itensComMatch.map((it, idx) => `
+        <div class="pdf-preview-row" data-idx="${idx}" data-insumo-id="${it.match?.insumoId || ''}" data-pedido-item-id="${it.match?.pedidoItemId || ''}" data-numero-pedido="${it.match?.numeroPedido || ''}">
+          <div class="field"><input class="pdf-desc" value="${(it.descricao || '').replace(/"/g,'&quot;')}"></div>
+          <div class="field"><input type="number" step="0.0001" class="pdf-qtd" value="${it.quantidade}"></div>
+          <div class="field"><input type="number" step="0.0001" class="pdf-valor" value="${it.valorUnitario}"></div>
+          <button class="link-plain" onclick="this.closest('.pdf-preview-row').remove()">descartar</button>
+        </div>
+        ${it.match ? `<div style="font-size:11.5px;color:var(--ok);margin:-4px 0 8px 4px;">vinculado ao insumo "${it.match.insumoDescricao}" do pedido nº ${it.match.numeroPedido}</div>` : ''}
+      `).join('') +
+      `<button class="btn small secondary" onclick="usarItensDoXml()">Usar estes itens na nota</button>`;
+  }catch(e){
+    status.innerHTML = `<span style="color:var(--danger)">Erro ao ler o arquivo: ${e.message}</span>`;
+  }
+}
+
+function usarItensDoXml(){
+  const linhas = [...document.querySelectorAll('#xml-nota-preview .pdf-preview-row')];
+  document.getElementById('nota-itens').innerHTML = '';
+  linhas.forEach(row => {
+    addLinhaNotaItem({
+      descricao: row.querySelector('.pdf-desc').value,
+      quantidade: row.querySelector('.pdf-qtd').value,
+      valorUnitario: row.querySelector('.pdf-valor').value,
+      insumoId: row.dataset.insumoId || null,
+      pedidoItemId: row.dataset.pedidoItemId || null,
+      numeroPedido: row.dataset.numeroPedido || null
+    });
+  });
+  document.getElementById('xml-nota-preview').innerHTML = '';
+  document.getElementById('xml-nota-status').innerHTML = 'Itens transferidos para o formulário abaixo — confira antes de salvar.';
+}
+
 async function abrirDetalheNota(notaId){
   document.getElementById('detalhe-nota-msg').innerHTML = '';
   const { data: nota } = await sb.from('notas_fiscais').select('*, fornecedores(nome)').eq('id', notaId).single();
   document.getElementById('detalhe-nota-titulo').textContent = `Nota ${nota.numero}${nota.serie ? '/'+nota.serie : ''} — ${nota.fornecedores?.nome || ''}`;
   const { data: itens } = await sb.from('notas_fiscais_itens').select('*').eq('nota_id', notaId);
-  const { data: insumos } = await sb.from('insumos').select('id, descricao, codigo_interno').eq('ativo', true).order('descricao');
+  const { data: insumos } = await sb.from('insumos').select('id, descricao, codigo_interno, codigo_detalhe, marca').eq('ativo', true).order('descricao');
   const { data: locais } = await sb.from('localizacoes_caminho').select('id, caminho').eq('empresa_id', empresaAtual).eq('tipo', 'endereco');
   const box = document.getElementById('detalhe-nota-itens');
   box.innerHTML = itens.map(item => renderNotaItemBlock(item, insumos, locais, nota.fornecedor_id)).join('');
@@ -886,7 +1306,7 @@ async function abrirDetalheNota(notaId){
 }
 
 function renderNotaItemBlock(item, insumos, locais, fornecedor_id){
-  const insumoOptions = insumos.map(i=>`<option value="${i.id}" ${item.insumo_id===i.id?'selected':''}>${i.codigo_interno} — ${i.descricao}</option>`).join('');
+  const insumoOptions = insumos.map(i=>`<option value="${i.id}" ${item.insumo_id===i.id?'selected':''}>${formatarCodigoInsumo(i)} — ${i.descricao}</option>`).join('');
   const localOptions = locais.map(l=>`<option value="${l.id}" ${item.localizacao_destino_id===l.id?'selected':''}>${l.caminho}</option>`).join('');
   const processado = item.processado;
   return `
@@ -928,21 +1348,244 @@ async function processarEntradaItem(itemId, btn){
 }
 
 /* ==========================================================================
+   REQUISIÇÃO ELETRÔNICA
+   ========================================================================== */
+async function carregarRequisicoes(){
+  const box = document.getElementById('tabela-requisicoes');
+  if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa.</div>'; return; }
+  const { data, error } = await sb.from('requisicoes')
+    .select('id, criado_em, nome_requisitante, status, ordens_servico(numero), equipamentos(descricao), requisicoes_itens(id)')
+    .eq('empresa_id', empresaAtual).order('criado_em', { ascending:false });
+  if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+  if(!data.length){ box.innerHTML = '<div class="empty">Nenhuma requisição registrada ainda.</div>'; return; }
+  box.innerHTML = `<table><thead><tr><th>Data</th><th>Requisitante</th><th>Aplicação</th><th>Itens</th><th>Status</th></tr></thead><tbody>${data.map(r=>`
+    <tr>
+      <td class="mono">${new Date(r.criado_em).toLocaleString('pt-BR')}</td>
+      <td>${r.nome_requisitante || '—'}</td>
+      <td>${r.ordens_servico?.numero ? 'OS ' + r.ordens_servico.numero : (r.equipamentos?.descricao || '—')}</td>
+      <td class="mono">${r.requisicoes_itens?.length || 0}</td>
+      <td><span class="badge ${r.status === 'atendida' ? 'processado' : r.status === 'cancelada' ? 'divergente' : 'pendente'}">${r.status}</span></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function abrirModalRequisicao(){
+  document.getElementById('req-data').value = new Date().toISOString().slice(0,10);
+  const { data: perfil } = await sb.from('perfis').select('nome').eq('id', usuarioAtual.id).single();
+  document.getElementById('req-requisitante').value = perfil?.nome || '';
+  document.getElementById('requisicao-msg').innerHTML = '';
+  document.getElementById('req-itens').innerHTML = '';
+
+  const { data: locais } = await sb.from('localizacoes_caminho').select('id, caminho').eq('empresa_id', empresaAtual).eq('tipo','endereco');
+  const selLocal = document.getElementById('req-localizacao');
+  selLocal.innerHTML = '<option value="">Selecione…</option>' + (locais||[]).map(l=>`<option value="${l.id}">${l.caminho}</option>`).join('');
+
+  const { data: listaOs } = await sb.from('ordens_servico').select('id, numero').eq('empresa_id', empresaAtual);
+  document.getElementById('req-os').innerHTML = '<option value="">— nenhuma —</option>' + (listaOs||[]).map(o=>`<option value="${o.id}">${o.numero}</option>`).join('');
+
+  const { data: listaEquip } = await sb.from('equipamentos').select('id, descricao').eq('empresa_id', empresaAtual);
+  document.getElementById('req-equipamento').innerHTML = '<option value="">— nenhum —</option>' + (listaEquip||[]).map(e=>`<option value="${e.id}">${e.descricao}</option>`).join('');
+
+  addLinhaRequisicaoItem();
+  prepararCanvasAssinatura();
+  abrirModal('modal-requisicao');
+}
+
+function addLinhaRequisicaoItem(){
+  const wrap = document.getElementById('req-itens');
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  const rowId = 'req-item-' + Date.now() + Math.random().toString(36).slice(2,6);
+  row.dataset.rowId = rowId;
+  row.innerHTML = `
+    <div class="field"><label>Código de barras</label>
+      <div style="display:flex;gap:6px;">
+        <input type="text" class="req-barcode" placeholder="Leia ou digite o código" style="flex:1;">
+        <button type="button" class="btn small secondary" onclick="iniciarLeituraCamera(this)">📷 Câmera</button>
+      </div>
+      <div class="req-insumo-encontrado" style="font-size:11.5px;margin-top:4px;color:var(--text-dim);">Aguardando leitura…</div>
+    </div>
+    <div class="field"><label>Quantidade</label><input type="number" step="0.0001" class="req-qtd qtd"></div>
+    <button class="link-plain" onclick="this.closest('.item-row').remove()">remover</button>`;
+  wrap.appendChild(row);
+  const inputBarcode = row.querySelector('.req-barcode');
+  const buscar = () => buscarInsumoPorCodigoBarrasNaLinha(row);
+  inputBarcode.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); buscar(); } });
+  inputBarcode.addEventListener('blur', buscar);
+}
+
+async function buscarInsumoPorCodigoBarrasNaLinha(row){
+  const codigo = row.querySelector('.req-barcode').value.trim();
+  const info = row.querySelector('.req-insumo-encontrado');
+  if(!codigo){ info.textContent = 'Aguardando leitura…'; info.style.color = 'var(--text-dim)'; row.dataset.insumoId = ''; return; }
+  const { data } = await sb.from('insumos').select('id, descricao, codigo_interno')
+    .or(`codigo_barras.eq.${codigo},codigo_interno.eq.${codigo}`).maybeSingle();
+  if(data){
+    row.dataset.insumoId = data.id;
+    info.textContent = `✓ ${formatarCodigoInsumo(data)} — ${data.descricao}`;
+    info.style.color = 'var(--ok)';
+  } else {
+    row.dataset.insumoId = '';
+    info.textContent = '✗ nenhum insumo encontrado com esse código';
+    info.style.color = 'var(--danger)';
+  }
+}
+
+/* ---- Leitura de código de barras pela câmera (ZXing) ---- */
+let zxingReader = null;
+let inputAlvoCamera = null;
+
+async function iniciarLeituraCamera(botao){
+  inputAlvoCamera = botao.closest('.item-row').querySelector('.req-barcode');
+  abrirModal('camera-overlay');
+  const video = document.getElementById('camera-video');
+  zxingReader = new ZXing.BrowserMultiFormatReader();
+  try{
+    await zxingReader.decodeFromVideoDevice(null, video, (resultado, erro) => {
+      if(resultado){
+        inputAlvoCamera.value = resultado.getText();
+        pararLeituraCamera();
+        buscarInsumoPorCodigoBarrasNaLinha(inputAlvoCamera.closest('.item-row'));
+      }
+    });
+  }catch(e){
+    alert('Não foi possível acessar a câmera: ' + e.message);
+    pararLeituraCamera();
+  }
+}
+
+function pararLeituraCamera(){
+  if(zxingReader){ try{ zxingReader.reset(); }catch(e){} zxingReader = null; }
+  fecharModal('camera-overlay');
+}
+
+/* ---- Assinatura eletrônica (canvas) ---- */
+let ctxAssinatura = null, desenhando = false, assinaturaVazia = true;
+
+function prepararCanvasAssinatura(){
+  const canvas = document.getElementById('req-assinatura-canvas');
+  ctxAssinatura = canvas.getContext('2d');
+  ctxAssinatura.clearRect(0,0,canvas.width,canvas.height);
+  assinaturaVazia = true;
+  ctxAssinatura.lineWidth = 2;
+  ctxAssinatura.lineCap = 'round';
+  ctxAssinatura.strokeStyle = '#20221E';
+
+  const posicao = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const escalaX = canvas.width / rect.width, escalaY = canvas.height / rect.height;
+    const ponto = e.touches ? e.touches[0] : e;
+    return { x: (ponto.clientX - rect.left) * escalaX, y: (ponto.clientY - rect.top) * escalaY };
+  };
+  const iniciar = (e) => { desenhando = true; assinaturaVazia = false; const p = posicao(e); ctxAssinatura.beginPath(); ctxAssinatura.moveTo(p.x, p.y); e.preventDefault(); };
+  const mover = (e) => { if(!desenhando) return; const p = posicao(e); ctxAssinatura.lineTo(p.x, p.y); ctxAssinatura.stroke(); e.preventDefault(); };
+  const finalizar = () => { desenhando = false; };
+
+  canvas.onmousedown = iniciar; canvas.onmousemove = mover; canvas.onmouseup = finalizar; canvas.onmouseleave = finalizar;
+  canvas.ontouchstart = iniciar; canvas.ontouchmove = mover; canvas.ontouchend = finalizar;
+}
+
+function limparAssinatura(){
+  const canvas = document.getElementById('req-assinatura-canvas');
+  ctxAssinatura.clearRect(0,0,canvas.width,canvas.height);
+  assinaturaVazia = true;
+}
+
+/* ---- Finalização: cria a requisição, faz upload da assinatura e dá baixa nos itens ---- */
+async function finalizarRequisicao(){
+  const msg = document.getElementById('requisicao-msg');
+  const nome_requisitante = document.getElementById('req-requisitante').value.trim();
+  const localizacao_origem_id = document.getElementById('req-localizacao').value;
+  const ordem_servico_id = document.getElementById('req-os').value || null;
+  const equipamento_id = document.getElementById('req-equipamento').value || null;
+
+  if(!nome_requisitante){ msg.innerHTML = '<div class="msg error">Informe o nome do requisitante.</div>'; return; }
+  if(!localizacao_origem_id){ msg.innerHTML = '<div class="msg error">Selecione a localização de origem.</div>'; return; }
+  if(assinaturaVazia){ msg.innerHTML = '<div class="msg error">Colete a assinatura do requisitante antes de finalizar.</div>'; return; }
+
+  const linhas = [...document.querySelectorAll('#req-itens .item-row')].map(row => ({
+    insumo_id: row.dataset.insumoId || null,
+    quantidade: parseFloat(row.querySelector('.req-qtd').value)
+  })).filter(l => l.insumo_id && l.quantidade > 0);
+
+  if(!linhas.length){ msg.innerHTML = '<div class="msg error">Adicione ao menos um item com código de barras reconhecido e quantidade.</div>'; return; }
+
+  msg.innerHTML = '<div class="msg warn">Processando requisição…</div>';
+
+  const { data: requisicao, error: errReq } = await sb.from('requisicoes').insert({
+    empresa_id: empresaAtual, solicitante_id: usuarioAtual.id, nome_requisitante,
+    localizacao_origem_id, ordem_servico_id, equipamento_id, status: 'pendente'
+  }).select().single();
+  if(errReq){ msg.innerHTML = `<div class="msg error">${errReq.message}</div>`; return; }
+
+  const { data: itensCriados, error: errItens } = await sb.from('requisicoes_itens')
+    .insert(linhas.map(l => ({ requisicao_id: requisicao.id, insumo_id: l.insumo_id, quantidade_solicitada: l.quantidade })))
+    .select();
+  if(errItens){ msg.innerHTML = `<div class="msg error">${errItens.message}</div>`; return; }
+
+  // upload da assinatura
+  const canvas = document.getElementById('req-assinatura-canvas');
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  const caminhoArquivo = `requisicao_${requisicao.id}.png`;
+  const { error: errUpload } = await sb.storage.from('assinaturas').upload(caminhoArquivo, blob, { upsert: true, contentType: 'image/png' });
+  let assinatura_url = null;
+  if(!errUpload){
+    const { data: urlPublica } = sb.storage.from('assinaturas').getPublicUrl(caminhoArquivo);
+    assinatura_url = urlPublica?.publicUrl || null;
+  }
+
+  await sb.from('requisicoes').update({ assinatura_url, assinado_em: new Date().toISOString(), status: 'assinada' }).eq('id', requisicao.id);
+
+  // baixa de cada item
+  const falhas = [];
+  for(const item of itensCriados){
+    const { error: errBaixa } = await sb.rpc('fn_atender_requisicao_item', {
+      p_requisicao_item_id: item.id, p_quantidade: item.quantidade_solicitada,
+      p_localizacao_id: localizacao_origem_id, p_usuario_id: usuarioAtual.id
+    });
+    if(errBaixa) falhas.push(errBaixa.message);
+  }
+
+  if(falhas.length){
+    await sb.from('requisicoes').update({ status: 'atendida_parcial' }).eq('id', requisicao.id);
+    msg.innerHTML = `<div class="msg error">Requisição criada, mas alguns itens não puderam ser baixados: ${falhas.join('; ')}</div>`;
+    return;
+  }
+
+  await sb.from('requisicoes').update({ status: 'atendida' }).eq('id', requisicao.id);
+  fecharModal('modal-requisicao');
+  carregarRequisicoes();
+}
+
+/* ==========================================================================
    SALDO / ALERTAS
    ========================================================================== */
 async function carregarSaldo(){
   const box = document.getElementById('tabela-saldo');
   if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa.</div>'; return; }
   const busca = document.getElementById('busca-saldo')?.value?.trim() || '';
-  const { data, error } = await sb.from('estoque_saldos')
-    .select('quantidade, insumos(codigo_interno, descricao, custo_medio, unidades_medida(sigla)), localizacoes_caminho(caminho)')
-    .eq('empresa_id', empresaAtual).gt('quantidade', 0);
+
+  const [{ data, error }, { data: todasLocais }] = await Promise.all([
+    sb.from('estoque_saldos')
+      .select('quantidade, localizacao_id, insumos(codigo_interno, codigo_detalhe, marca, descricao, custo_medio, unidades_medida(sigla))')
+      .eq('empresa_id', empresaAtual).gt('quantidade', 0),
+    sb.from('localizacoes').select('id, codigo, parent_id').eq('empresa_id', empresaAtual)
+  ]);
   if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+
+  const mapaLocais = {};
+  (todasLocais || []).forEach(l => mapaLocais[l.id] = l);
+  const caminhoDe = (id) => {
+    const l = mapaLocais[id];
+    if(!l) return '—';
+    const pai = l.parent_id ? mapaLocais[l.parent_id] : null;
+    return [pai?.codigo, l.codigo].filter(Boolean).join(' / ') || '—';
+  };
+
   let linhas = data || [];
   if(busca){ linhas = linhas.filter(l => l.insumos?.descricao?.toLowerCase().includes(busca.toLowerCase()) || l.insumos?.codigo_interno?.toLowerCase().includes(busca.toLowerCase())); }
   if(!linhas.length){ box.innerHTML = '<div class="empty">Nenhum saldo encontrado.</div>'; return; }
   box.innerHTML = `<table><thead><tr><th>Código</th><th>Insumo</th><th>Localização</th><th>Quantidade</th><th>Custo médio</th><th>Valor total</th></tr></thead><tbody>${linhas.map(l=>`
-    <tr><td class="mono">${l.insumos?.codigo_interno || '—'}</td><td>${l.insumos?.descricao || '—'}</td><td>${l.localizacoes_caminho?.caminho || '—'}</td>
+    <tr><td class="mono">${l.insumos ? formatarCodigoInsumo(l.insumos) : '—'}</td><td>${l.insumos?.descricao || '—'}</td><td>${caminhoDe(l.localizacao_id)}</td>
     <td class="mono">${Number(l.quantidade).toFixed(2)} ${l.insumos?.unidades_medida?.sigla || ''}</td>
     <td class="mono">R$ ${Number(l.insumos?.custo_medio || 0).toFixed(4)}</td>
     <td class="mono">R$ ${(l.quantidade * (l.insumos?.custo_medio || 0)).toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
@@ -954,7 +1597,7 @@ async function carregarAlertas(){
   if(error){ box.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
   if(!data.length){ box.innerHTML = '<div class="empty">Nenhum insumo abaixo do estoque mínimo. 👍</div>'; return; }
   box.innerHTML = `<table><thead><tr><th>Código</th><th>Insumo</th><th>Saldo atual</th><th>Estoque mínimo</th></tr></thead><tbody>${data.map(a=>`
-    <tr><td class="mono">${a.codigo_interno}</td><td>${a.descricao}</td>
+    <tr><td class="mono">${formatarCodigoInsumo(a)}</td><td>${a.descricao}</td>
     <td class="mono" style="color:var(--danger)">${Number(a.saldo_total).toFixed(2)}</td><td class="mono">${Number(a.estoque_minimo).toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
 }
 
@@ -1036,23 +1679,40 @@ async function carregarInsumosConfig(){
   box.innerHTML = `<table><thead><tr>
     <th>Código</th><th>Descrição</th><th>Unidade</th><th>Estoque mínimo</th><th>Código de detalhe</th><th>Marca</th><th></th>
   </tr></thead><tbody>${linhas.map(i=>`
-    <tr data-insumo-id="${i.id}">
-      <td class="mono">${i.codigo_interno}</td>
-      <td>${i.descricao}</td>
+    <tr data-insumo-id="${i.id}" data-descricao-original="${i.descricao.replace(/"/g,'&quot;')}">
+      <td class="mono">${formatarCodigoInsumo(i)}</td>
+      <td><input class="insumo-descricao-edit" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.descricao.replace(/"/g,'&quot;')}"></td>
       <td>${i.unidades_medida?.sigla || '—'}</td>
-      <td class="mono">${i.estoque_minimo}</td>
+      <td><input type="number" step="0.01" class="insumo-min-edit mono" style="width:90px;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.estoque_minimo}"></td>
       <td><input class="insumo-detalhe-edit mono" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.codigo_detalhe || ''}" placeholder="—"></td>
       <td><input class="insumo-marca-edit" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.marca || ''}" placeholder="—"></td>
-      <td><button class="btn small secondary" onclick="salvarDetalheMarcaInsumo('${i.id}', this)">Salvar</button></td>
+      <td><button class="btn small secondary" onclick="salvarEdicaoInsumo('${i.id}', this)">Salvar</button></td>
     </tr>`).join('')}</tbody></table>`;
 }
 
-async function salvarDetalheMarcaInsumo(id, btn){
+async function salvarEdicaoInsumo(id, btn){
   const row = btn.closest('tr');
+  const descricaoOriginal = row.dataset.descricaoOriginal;
+  const descricaoNova = row.querySelector('.insumo-descricao-edit').value.trim();
+  const estoque_minimo = parseFloat(row.querySelector('.insumo-min-edit').value) || 0;
   const codigo_detalhe = row.querySelector('.insumo-detalhe-edit').value.trim() || null;
   const marca = row.querySelector('.insumo-marca-edit').value.trim() || null;
-  const { error } = await sb.from('insumos').update({ codigo_detalhe, marca }).eq('id', id);
+
+  const dadosParaAtualizar = { estoque_minimo, codigo_detalhe, marca };
+
+  if(descricaoNova !== descricaoOriginal){
+    const { count } = await sb.from('movimentos_estoque').select('id', { count:'exact', head:true }).eq('insumo_id', id);
+    if(count && count > 0){
+      alert(`Não é possível alterar o nome deste insumo: já existem ${count} movimentação(ões) de estoque registradas para ele. O estoque mínimo, código de detalhe e marca ainda podem ser alterados.`);
+      row.querySelector('.insumo-descricao-edit').value = descricaoOriginal;
+    } else {
+      dadosParaAtualizar.descricao = descricaoNova;
+    }
+  }
+
+  const { error } = await sb.from('insumos').update(dadosParaAtualizar).eq('id', id);
   if(error){ alert('Erro ao salvar: ' + error.message); return; }
+  row.dataset.descricaoOriginal = dadosParaAtualizar.descricao || descricaoOriginal;
   const original = btn.textContent;
   btn.textContent = 'Salvo!';
   setTimeout(()=> btn.textContent = original, 1200);
