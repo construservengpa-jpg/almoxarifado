@@ -147,9 +147,9 @@
       <button data-view="inicio" class="active">Início</button>
       <button data-view="pedidos">Pedidos de Compra</button>
       <button data-view="notas">Notas Fiscais</button>
-      <button data-view="saldo">Saldo de Estoque</button>
-      <button data-view="requisicoes">Requisições</button>
-      <button data-view="alertas">Alerta de Mínimo</button>
+      <button data-view="estoque">Estoque</button>
+      <button data-view="frotas">Controle de Frotas</button>
+      <button data-view="cadastros">Cadastros</button>
       <button data-view="config">Configurações</button>
     </nav>
     <div class="userbox">
@@ -172,7 +172,7 @@
     <div class="view" id="view-pedidos">
       <div class="view-header">
         <h2>Pedidos de Compra</h2>
-        <button class="btn" onclick="abrirModalPedido()">Novo pedido</button>
+        <button class="btn" data-secao="pedidos" onclick="abrirModalPedido()">Novo pedido</button>
       </div>
       <div id="tabela-pedidos"><div class="empty">Carregando…</div></div>
     </div>
@@ -181,131 +181,54 @@
     <div class="view" id="view-notas">
       <div class="view-header">
         <h2>Notas Fiscais</h2>
-        <button class="btn" onclick="abrirModalNota()">Nova nota fiscal</button>
+        <button class="btn" data-secao="notas" onclick="abrirModalNota()">Nova nota fiscal</button>
       </div>
       <div id="tabela-notas"><div class="empty">Carregando…</div></div>
     </div>
 
-    <!-- SALDO -->
-    <div class="view" id="view-saldo">
-      <div class="view-header"><h2>Saldo de Estoque</h2></div>
-      <div class="toolbar"><input type="text" id="busca-saldo" placeholder="Buscar insumo…" oninput="carregarSaldo()"></div>
-      <div id="tabela-saldo"><div class="empty">Carregando…</div></div>
-    </div>
-
-    <!-- REQUISIÇÕES -->
-    <div class="view" id="view-requisicoes">
-      <div class="view-header">
-        <h2>Requisições</h2>
-        <button class="btn" onclick="abrirModalRequisicao()">Nova requisição</button>
-      </div>
-      <div id="tabela-requisicoes"><div class="empty">Carregando…</div></div>
-    </div>
-
-    <!-- ALERTAS -->
-    <div class="view" id="view-alertas">
-      <div class="view-header"><h2>Insumos abaixo do estoque mínimo</h2></div>
-      <div id="tabela-alertas"><div class="empty">Carregando…</div></div>
-    </div>
-
-
-    <!-- CONFIGURAÇÕES -->
-    <div class="view" id="view-config">
-      <div class="view-header"><h2>Configurações</h2></div>
+    <!-- ESTOQUE -->
+    <div class="view" id="view-estoque">
+      <div class="view-header"><h2>Estoque</h2></div>
       <div class="subtabs">
-        <button data-sub="empresas" class="active">Empresas</button>
-        <button data-sub="centros">Centros de Custo</button>
-        <button data-sub="fornecedores">Fornecedores</button>
-        <button data-sub="insumos">Insumos</button>
-        <button data-sub="localizacoes">Localizações</button>
-        <button data-sub="equipamentos">Equipamentos</button>
-        <button data-sub="ordens">Ordens de Serviço</button>
-        <button data-sub="usuarios">Usuários</button>
+        <button data-sub="estoque-saldo" class="active">Saldo</button>
+        <button data-sub="estoque-requisicoes">Requisições</button>
+        <button data-sub="estoque-alertas">Alerta de Mínimo</button>
       </div>
 
-      <div class="subview active" id="sub-empresas">
-        <div class="inline-form">
-          <div id="empresas-msg"></div>
-          <div class="row-fields">
-            <div class="field"><label>Razão social</label><input id="empresa-razao"></div>
-            <div class="field"><label>CNPJ</label><input id="empresa-cnpj"></div>
-            <div class="field"><label>Nome fantasia</label><input id="empresa-fantasia"></div>
-          </div>
-          <button class="btn small" onclick="salvarEmpresa()">Adicionar empresa</button>
-        </div>
-        <div id="lista-empresas"></div>
+      <div class="subview active" id="sub-estoque-saldo">
+        <div class="toolbar"><input type="text" id="busca-saldo" placeholder="Buscar insumo…" oninput="carregarSaldo()"></div>
+        <div id="tabela-saldo"><div class="empty">Carregando…</div></div>
       </div>
 
-      <div class="subview" id="sub-centros">
-        <div class="inline-form">
-          <div id="centros-msg"></div>
-          <div class="row-fields">
-            <div class="field"><label>Empresa</label><select id="centro-empresa"></select></div>
-            <div class="field"><label>Código</label><input id="centro-codigo"></div>
-            <div class="field"><label>Nome</label><input id="centro-nome"></div>
-          </div>
-          <button class="btn small" onclick="salvarCentro()">Adicionar centro de custo</button>
+      <div class="subview" id="sub-estoque-requisicoes">
+        <div class="toolbar" style="justify-content:flex-end;display:flex;">
+          <button class="btn" data-secao="requisicoes" onclick="abrirModalRequisicao()">Nova requisição</button>
         </div>
-        <div id="lista-centros"></div>
+        <div id="tabela-requisicoes"><div class="empty">Carregando…</div></div>
       </div>
 
-      <div class="subview" id="sub-fornecedores">
-        <div class="inline-form">
-          <div id="fornecedores-msg"></div>
-          <div class="row-fields">
-            <div class="field"><label>Nome</label><input id="fornecedor-nome"></div>
-            <div class="field"><label>CNPJ</label><input id="fornecedor-cnpj"></div>
-            <div class="field"><label>Contato</label><input id="fornecedor-contato"></div>
-          </div>
-          <button class="btn small" onclick="salvarFornecedor()">Adicionar fornecedor</button>
-        </div>
-        <div id="lista-fornecedores"></div>
+      <div class="subview" id="sub-estoque-alertas">
+        <div id="tabela-alertas"><div class="empty">Carregando…</div></div>
+      </div>
+    </div>
+
+    <!-- CONTROLE DE FROTAS -->
+    <div class="view" id="view-frotas">
+      <div class="view-header"><h2>Controle de Frotas</h2></div>
+      <div class="subtabs">
+        <button data-sub="frota-inicio" class="active">Início</button>
+        <button data-sub="frota-equipamentos">Equipamentos</button>
+        <button data-sub="frota-ordens">Ordens de Serviço</button>
       </div>
 
-      <div class="subview" id="sub-insumos">
-        <div class="inline-form">
-          <div id="insumos-msg"></div>
-          <div class="row-fields">
-            <div class="field"><label>Código interno</label><input id="insumo-codigo"></div>
-            <div class="field"><label>Descrição</label><input id="insumo-descricao"></div>
-            <div class="field"><label>Unidade</label><select id="insumo-unidade"></select></div>
-            <div class="field"><label>Estoque mínimo</label><input type="number" step="0.01" id="insumo-min"></div>
-            <div class="field"><label>Código de barras</label><input id="insumo-barras"></div>
-            <div class="field"><label>Código de detalhe</label><input id="insumo-detalhe" placeholder="Preenchimento manual"></div>
-            <div class="field"><label>Marca</label><input id="insumo-marca" placeholder="Preenchimento manual"></div>
-          </div>
-          <button class="btn small" onclick="salvarInsumo()">Adicionar insumo</button>
-        </div>
-        <div class="toolbar"><input type="text" id="busca-insumo" placeholder="Buscar insumo…" oninput="carregarInsumosConfig()"></div>
-        <div id="lista-insumos"></div>
+      <div class="subview active" id="sub-frota-inicio">
+        <div class="cards" id="frota-cards"></div>
+        <h3 style="font-size:14px;color:var(--text-dim);margin-bottom:10px;">Custo total aplicado por equipamento</h3>
+        <div id="frota-custo-equipamento"><div class="empty">Carregando…</div></div>
       </div>
 
-      <div class="subview" id="sub-localizacoes">
-        <div class="inline-form">
-          <h3 style="font-size:14px;margin-bottom:12px;">Novo estoque</h3>
-          <div id="estoques-msg"></div>
-          <div class="row-fields">
-            <div class="field"><label>Empresa</label><select id="estoque-empresa"></select></div>
-            <div class="field"><label>Nome do estoque</label><input id="estoque-nome" placeholder="Ex: Almoxarifado Central, Canteiro Obra X"></div>
-          </div>
-          <button class="btn small" onclick="salvarEstoque()">Adicionar estoque</button>
-        </div>
-        <div id="lista-estoques" style="margin-bottom:24px;"></div>
-
-        <div class="inline-form">
-          <h3 style="font-size:14px;margin-bottom:12px;">Novo endereço (dentro de um estoque)</h3>
-          <div id="enderecos-msg"></div>
-          <div class="row-fields">
-            <div class="field"><label>Estoque</label><select id="endereco-estoque"></select></div>
-            <div class="field"><label>Endereço</label><input id="endereco-codigo" placeholder="Ex: Rua A - Estante 1 - Prateleira D"></div>
-          </div>
-          <button class="btn small" onclick="salvarEndereco()">Adicionar endereço</button>
-        </div>
-        <div id="lista-enderecos"></div>
-      </div>
-
-      <div class="subview" id="sub-equipamentos">
-        <div class="inline-form">
+      <div class="subview" id="sub-frota-equipamentos">
+        <div class="inline-form" data-secao="frotas">
           <div id="equipamentos-msg"></div>
           <div class="row-fields">
             <div class="field"><label>Empresa</label><select id="equipamento-empresa"></select></div>
@@ -317,8 +240,8 @@
         <div id="lista-equipamentos"></div>
       </div>
 
-      <div class="subview" id="sub-ordens">
-        <div class="inline-form">
+      <div class="subview" id="sub-frota-ordens">
+        <div class="inline-form" data-secao="frotas">
           <div id="ordens-msg"></div>
           <div class="row-fields">
             <div class="field"><label>Empresa</label><select id="ordem-empresa" onchange="atualizarEquipamentosDaOrdem()"></select></div>
@@ -331,11 +254,118 @@
         </div>
         <div id="lista-ordens"></div>
       </div>
+    </div>
+
+
+    <!-- CONFIGURAÇÕES -->
+    <div class="view" id="view-config">
+      <div class="view-header"><h2>Configurações</h2></div>
+      <div class="subtabs">
+        <button data-sub="empresas" class="active">Empresas</button>
+        <button data-sub="centros">Centros de Custo</button>
+        <button data-sub="usuarios">Usuários</button>
+      </div>
+
+      <div class="subview active" id="sub-empresas">
+        <div class="inline-form" data-secao="empresas">
+          <div id="empresas-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Razão social</label><input id="empresa-razao"></div>
+            <div class="field"><label>CNPJ</label><input id="empresa-cnpj"></div>
+            <div class="field"><label>Nome fantasia</label><input id="empresa-fantasia"></div>
+          </div>
+          <button class="btn small" onclick="salvarEmpresa()">Adicionar empresa</button>
+        </div>
+        <div id="lista-empresas"></div>
+      </div>
+
+      <div class="subview" id="sub-centros">
+        <div class="inline-form" data-secao="centros">
+          <div id="centros-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Empresa</label><select id="centro-empresa"></select></div>
+            <div class="field"><label>Código</label><input id="centro-codigo"></div>
+            <div class="field"><label>Nome</label><input id="centro-nome"></div>
+          </div>
+          <button class="btn small" onclick="salvarCentro()">Adicionar centro de custo</button>
+        </div>
+        <div id="lista-centros"></div>
+      </div>
 
       <div class="subview" id="sub-usuarios">
         <div class="msg warn">Criar o login (e-mail/senha) ainda precisa ser feito no Supabase Studio → Authentication → Users, por segurança. Aqui você só define o papel e vincula o usuário a uma empresa.</div>
         <div id="usuarios-msg"></div>
         <div id="lista-usuarios"></div>
+      </div>
+    </div>
+
+    <!-- CADASTROS -->
+    <div class="view" id="view-cadastros">
+      <div class="view-header"><h2>Cadastros</h2></div>
+      <div class="subtabs">
+        <button data-sub="cad-fornecedores" class="active">Fornecedores</button>
+        <button data-sub="cad-insumos">Insumos</button>
+        <button data-sub="cad-localizacoes">Localização</button>
+      </div>
+
+      <div class="subview active" id="sub-cad-fornecedores">
+        <h3 style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">Novo fornecedor</h3>
+        <div class="inline-form" data-secao="fornecedores">
+          <div id="fornecedores-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Nome</label><input id="fornecedor-nome"></div>
+            <div class="field"><label>CNPJ</label><input id="fornecedor-cnpj"></div>
+            <div class="field"><label>Contato</label><input id="fornecedor-contato"></div>
+          </div>
+          <button class="btn small" onclick="salvarFornecedor()">Adicionar fornecedor</button>
+        </div>
+        <div class="toolbar"><input type="text" id="busca-fornecedor" placeholder="Buscar fornecedor por nome ou CNPJ…" oninput="carregarFornecedoresConfig()"></div>
+        <div id="lista-fornecedores"></div>
+      </div>
+
+      <div class="subview" id="sub-cad-insumos">
+        <h3 style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">Novo insumo</h3>
+        <div class="inline-form" data-secao="insumos">
+          <div id="insumos-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Código interno</label><input id="insumo-codigo"></div>
+            <div class="field"><label>Descrição</label><input id="insumo-descricao"></div>
+            <div class="field"><label>Unidade</label><select id="insumo-unidade"></select></div>
+            <div class="field"><label>Estoque mínimo</label><input type="number" step="0.01" id="insumo-min"></div>
+            <div class="field"><label>Código de barras</label><input id="insumo-barras"></div>
+            <div class="field"><label>Código de detalhe</label><input id="insumo-detalhe" placeholder="Preenchimento manual"></div>
+            <div class="field"><label>Marca</label><input id="insumo-marca" placeholder="Preenchimento manual"></div>
+          </div>
+          <button class="btn small" onclick="salvarInsumo()">Adicionar insumo</button>
+        </div>
+        <div class="toolbar"><input type="text" id="busca-insumo" placeholder="Buscar insumo por código ou descrição…" oninput="carregarInsumosConfig()"></div>
+        <div id="lista-insumos"></div>
+      </div>
+
+      <div class="subview" id="sub-cad-localizacoes">
+        <h3 style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">Novo estoque</h3>
+        <div class="inline-form" data-secao="localizacoes">
+          <div id="estoques-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Empresa</label><select id="estoque-empresa"></select></div>
+            <div class="field"><label>Nome do estoque</label><input id="estoque-nome" placeholder="Ex: Almoxarifado Central, Canteiro Obra X"></div>
+          </div>
+          <button class="btn small" onclick="salvarEstoque()">Adicionar estoque</button>
+        </div>
+
+        <h3 style="font-size:13px;color:var(--text-dim);margin:18px 0 10px;">Novo endereço (dentro de um estoque)</h3>
+        <div class="inline-form" data-secao="localizacoes">
+          <div id="enderecos-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Estoque</label><select id="endereco-estoque"></select></div>
+            <div class="field"><label>Endereço</label><input id="endereco-codigo" placeholder="Ex: Rua A - Estante 1 - Prateleira D"></div>
+          </div>
+          <button class="btn small" onclick="salvarEndereco()">Adicionar endereço</button>
+        </div>
+
+        <div class="toolbar" style="margin-top:18px;"><input type="text" id="busca-localizacao" placeholder="Buscar estoque ou endereço…" oninput="carregarLocaisConfig()"></div>
+        <div id="lista-estoques" style="margin-bottom:10px;"></div>
+        <div id="lista-enderecos"></div>
       </div>
     </div>
 
@@ -468,6 +498,46 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dis
 
 let usuarioAtual = null;
 let empresaAtual = null;
+let papelAtual = null;
+
+/* ==========================================================================
+   PERMISSÕES POR PERFIL DE USUÁRIO
+   ========================================================================== */
+const PERMISSOES = {
+  admin:        { views: 'todas', editar: 'todas' },
+  gestor:       { views: ['inicio','pedidos','notas','estoque','frotas','cadastros'],
+                  editar: ['pedidos','notas','requisicoes','centros','frotas'] },
+  almoxarife:   { views: ['inicio','pedidos','notas','estoque','frotas','cadastros'],
+                  editar: ['pedidos','notas','requisicoes','fornecedores','insumos','localizacoes','frotas'] },
+  requisitante: { views: ['inicio','estoque'],
+                  editar: ['requisicoes'] }
+};
+
+function podeVerView(view){
+  const p = PERMISSOES[papelAtual];
+  if(!p) return false;
+  return p.views === 'todas' || p.views.includes(view);
+}
+function podeEditar(secao){
+  const p = PERMISSOES[papelAtual];
+  if(!p) return false;
+  return p.editar === 'todas' || p.editar.includes(secao);
+}
+
+function aplicarPermissoesUI(){
+  document.querySelectorAll('#sidebar nav button[data-view]').forEach(btn=>{
+    btn.style.display = podeVerView(btn.dataset.view) ? '' : 'none';
+  });
+  document.querySelectorAll('[data-secao]').forEach(el=>{
+    if(!podeEditar(el.dataset.secao) && el.style.display !== 'none'){
+      const aviso = document.createElement('div');
+      aviso.className = 'msg warn';
+      aviso.textContent = 'Seu perfil não tem permissão para incluir ou alterar cadastros aqui — apenas visualização.';
+      el.parentNode.insertBefore(aviso, el);
+      el.style.display = 'none';
+    }
+  });
+}
 
 /* ---------------- AUTENTICAÇÃO ---------------- */
 async function fazerLogin(){
@@ -486,6 +556,7 @@ async function entrarNoApp(){
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('sidebar').style.display = 'flex';
   document.getElementById('main').style.display = 'block';
+  aplicarPermissoesUI();
   carregarInicio();
 }
 
@@ -494,6 +565,7 @@ async function fazerLogout(){ await sb.auth.signOut(); location.reload(); }
 async function carregarContextoUsuario(){
   const { data: perfil } = await sb.from('perfis').select('*').eq('id', usuarioAtual.id).single();
   document.getElementById('user-nome').textContent = perfil?.nome || usuarioAtual.email;
+  papelAtual = perfil?.papel || 'requisitante';
   const { data: acessos } = await sb.from('usuario_empresas').select('empresa_id').eq('usuario_id', usuarioAtual.id);
   if(acessos && acessos.length){ empresaAtual = acessos[0].empresa_id; } else { empresaAtual = null; }
 }
@@ -509,19 +581,20 @@ document.querySelectorAll('#sidebar nav button').forEach(btn=>{
     if(v==='inicio') carregarInicio();
     if(v==='pedidos') carregarPedidos();
     if(v==='notas') carregarNotas();
-    if(v==='saldo') carregarSaldo();
-    if(v==='requisicoes') carregarRequisicoes();
-    if(v==='alertas') carregarAlertas();
+    if(v==='estoque') carregarEstoqueTudo();
+    if(v==='frotas') carregarFrotas();
+    if(v==='cadastros') carregarCadastrosTudo();
     if(v==='config') carregarConfigTudo();
   });
 });
 
-/* ---------------- NAVEGAÇÃO DAS SUB-ABAS DE CONFIGURAÇÕES ---------------- */
+/* ---------------- NAVEGAÇÃO DAS SUB-ABAS (escopada por tela) ---------------- */
 document.querySelectorAll('.subtabs button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.subtabs button').forEach(b=>b.classList.remove('active'));
+    const container = btn.closest('.view') || document;
+    container.querySelectorAll('.subtabs button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    document.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
+    container.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
     document.getElementById('sub-'+btn.dataset.sub).classList.add('active');
   });
 });
@@ -1347,11 +1420,13 @@ function renderNotaItemBlock(item, insumos, locais, fornecedor_id){
       </div>
       ${processado
         ? `<span class="badge processado">Entrada processada no estoque</span>`
-        : `<div class="nota-item-grid">
+        : podeEditar('notas')
+        ? `<div class="nota-item-grid">
             <div class="field"><label>Vincular ao insumo</label><select class="vinc-insumo"><option value="">Selecione…</option>${insumoOptions}</select></div>
             <div class="field"><label>Localização de destino</label><select class="vinc-local"><option value="">Selecione…</option>${localOptions}</select></div>
             <button class="btn small" onclick="processarEntradaItem('${item.id}', this)">Processar entrada</button>
           </div>`
+        : `<span class="badge pendente">Aguardando vínculo (seu perfil não pode processar)</span>`
       }
     </div>`;
 }
@@ -1617,6 +1692,10 @@ async function finalizarRequisicao(){
 /* ==========================================================================
    SALDO / ALERTAS
    ========================================================================== */
+async function carregarEstoqueTudo(){
+  await Promise.all([ carregarSaldo(), carregarRequisicoes(), carregarAlertas() ]);
+}
+
 async function carregarSaldo(){
   const box = document.getElementById('tabela-saldo');
   if(!empresaAtual){ box.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa.</div>'; return; }
@@ -1663,11 +1742,47 @@ async function carregarAlertas(){
    CONFIGURAÇÕES — cadastros e vínculos
    ========================================================================== */
 async function carregarConfigTudo(){
-  await Promise.all([
-    carregarEmpresasConfig(), carregarCentrosConfig(), carregarFornecedoresConfig(),
-    carregarInsumosConfig(), preencherSelectsLocaisConfig(), carregarLocaisConfig(), carregarUsuariosConfig(),
-    carregarEquipamentosConfig(), carregarOrdensServicoConfig()
+  await Promise.all([ carregarEmpresasConfig(), carregarCentrosConfig(), carregarUsuariosConfig() ]);
+}
+
+async function carregarCadastrosTudo(){
+  await Promise.all([ carregarFornecedoresConfig(), carregarInsumosConfig(), preencherSelectsLocaisConfig(), carregarLocaisConfig() ]);
+}
+
+async function carregarFrotas(){
+  await Promise.all([ carregarFrotaInicio(), carregarEquipamentosConfig(), carregarOrdensServicoConfig() ]);
+}
+
+async function carregarFrotaInicio(){
+  const cardsBox = document.getElementById('frota-cards');
+  const custoBox = document.getElementById('frota-custo-equipamento');
+  if(!empresaAtual){ cardsBox.innerHTML = ''; custoBox.innerHTML = '<div class="msg error">Seu usuário ainda não está vinculado a nenhuma empresa.</div>'; return; }
+
+  const [{ count: totalOS }, { count: abertas }, { count: concluidas }] = await Promise.all([
+    sb.from('ordens_servico').select('id', { count:'exact', head:true }).eq('empresa_id', empresaAtual),
+    sb.from('ordens_servico').select('id', { count:'exact', head:true }).eq('empresa_id', empresaAtual).in('status', ['aberta','em_andamento']),
+    sb.from('ordens_servico').select('id', { count:'exact', head:true }).eq('empresa_id', empresaAtual).eq('status', 'concluida')
   ]);
+
+  cardsBox.innerHTML = `
+    <div class="card"><div class="num">${totalOS || 0}</div><div class="lbl">Ordens de serviço (total)</div></div>
+    <div class="card"><div class="num">${abertas || 0}</div><div class="lbl">Em aberto</div></div>
+    <div class="card"><div class="num">${concluidas || 0}</div><div class="lbl">Concluídas</div></div>`;
+
+  const { data: movimentos, error } = await sb.from('movimentos_estoque')
+    .select('quantidade, valor_unitario, equipamentos(codigo, descricao)')
+    .eq('empresa_id', empresaAtual).not('equipamento_id', 'is', null);
+  if(error){ custoBox.innerHTML = `<div class="msg error">${error.message}</div>`; return; }
+
+  const porEquipamento = {};
+  (movimentos || []).forEach(m=>{
+    const nome = m.equipamentos ? `${m.equipamentos.codigo} — ${m.equipamentos.descricao}` : 'Sem equipamento identificado';
+    porEquipamento[nome] = (porEquipamento[nome] || 0) + (m.quantidade * (m.valor_unitario || 0));
+  });
+  const linhas = Object.entries(porEquipamento).sort((a,b)=> b[1] - a[1]);
+  if(!linhas.length){ custoBox.innerHTML = '<div class="empty">Nenhum custo aplicado a equipamentos ainda.</div>'; return; }
+  custoBox.innerHTML = `<table><thead><tr><th>Equipamento</th><th>Custo total aplicado</th></tr></thead><tbody>${linhas.map(([nome,total])=>`
+    <tr><td>${nome}</td><td class="mono">R$ ${total.toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 /* --- Empresas --- */
@@ -1709,8 +1824,11 @@ async function salvarCentro(){
 
 /* --- Fornecedores --- */
 async function carregarFornecedoresConfig(){
+  const busca = document.getElementById('busca-fornecedor')?.value?.trim().toLowerCase() || '';
   const { data } = await sb.from('fornecedores').select('*').order('nome');
-  document.getElementById('lista-fornecedores').innerHTML = renderTabelaSimples(data, [
+  let linhas = data || [];
+  if(busca) linhas = linhas.filter(f => f.nome?.toLowerCase().includes(busca) || f.cnpj?.toLowerCase().includes(busca));
+  document.getElementById('lista-fornecedores').innerHTML = renderTabelaSimples(linhas, [
     { campo:'nome', titulo:'Nome' }, { campo:'cnpj', titulo:'CNPJ' }, { campo:'contato', titulo:'Contato' }
   ], 'Nenhum fornecedor cadastrado.');
 }
@@ -1735,17 +1853,19 @@ async function carregarInsumosConfig(){
   if(busca) linhas = linhas.filter(i=> i.descricao.toLowerCase().includes(busca.toLowerCase()) || i.codigo_interno.toLowerCase().includes(busca.toLowerCase()));
   const box = document.getElementById('lista-insumos');
   if(!linhas.length){ box.innerHTML = '<div class="empty">Nenhum insumo cadastrado.</div>'; return; }
+  const editavel = podeEditar('insumos');
+  const dis = editavel ? '' : 'disabled';
   box.innerHTML = `<table><thead><tr>
     <th>Código</th><th>Descrição</th><th>Unidade</th><th>Estoque mínimo</th><th>Código de detalhe</th><th>Marca</th><th></th>
   </tr></thead><tbody>${linhas.map(i=>`
     <tr data-insumo-id="${i.id}" data-descricao-original="${i.descricao.replace(/"/g,'&quot;')}">
       <td class="mono">${formatarCodigoInsumo(i)}</td>
-      <td><input class="insumo-descricao-edit" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.descricao.replace(/"/g,'&quot;')}"></td>
+      <td><input ${dis} class="insumo-descricao-edit" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.descricao.replace(/"/g,'&quot;')}"></td>
       <td>${i.unidades_medida?.sigla || '—'}</td>
-      <td><input type="number" step="0.01" class="insumo-min-edit mono" style="width:90px;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.estoque_minimo}"></td>
-      <td><input class="insumo-detalhe-edit mono" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.codigo_detalhe || ''}" placeholder="—"></td>
-      <td><input class="insumo-marca-edit" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.marca || ''}" placeholder="—"></td>
-      <td><button class="btn small secondary" onclick="salvarEdicaoInsumo('${i.id}', this)">Salvar</button></td>
+      <td><input ${dis} type="number" step="0.01" class="insumo-min-edit mono" style="width:90px;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.estoque_minimo}"></td>
+      <td><input ${dis} class="insumo-detalhe-edit mono" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.codigo_detalhe || ''}" placeholder="—"></td>
+      <td><input ${dis} class="insumo-marca-edit" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:var(--radius);" value="${i.marca || ''}" placeholder="—"></td>
+      <td>${editavel ? `<button class="btn small secondary" onclick="salvarEdicaoInsumo('${i.id}', this)">Salvar</button>` : ''}</td>
     </tr>`).join('')}</tbody></table>`;
 }
 
@@ -1804,23 +1924,31 @@ async function preencherSelectEstoques(elementId){
   el.innerHTML = '<option value="">Selecione…</option>' + (data||[]).map(e=>`<option value="${e.id}">${e.codigo}</option>`).join('');
 }
 async function carregarLocaisConfig(){
+  const busca = document.getElementById('busca-localizacao')?.value?.trim().toLowerCase() || '';
+
   const { data: estoques } = await sb.from('localizacoes').select('id, codigo, empresas!localizacoes_empresa_id_fkey(razao_social)').eq('tipo','estoque').order('codigo');
-  document.getElementById('lista-estoques').innerHTML = renderListaEstoques(estoques);
+  let listaEstoques = estoques || [];
+  if(busca) listaEstoques = listaEstoques.filter(e => e.codigo.toLowerCase().includes(busca));
+  document.getElementById('lista-estoques').innerHTML = renderListaEstoques(listaEstoques);
 
   const { data: enderecos } = await sb.from('localizacoes_caminho').select('id, codigo, caminho').eq('tipo','endereco').order('caminho');
-  document.getElementById('lista-enderecos').innerHTML = renderListaEnderecos(enderecos);
+  let listaEnderecos = enderecos || [];
+  if(busca) listaEnderecos = listaEnderecos.filter(e => e.caminho.toLowerCase().includes(busca));
+  document.getElementById('lista-enderecos').innerHTML = renderListaEnderecos(listaEnderecos);
 }
 
 function renderListaEstoques(data){
   if(!data || !data.length) return '<div class="empty">Nenhum estoque cadastrado.</div>';
+  const editavel = podeEditar('localizacoes');
   return `<table><thead><tr><th>Estoque</th><th>Empresa</th><th></th></tr></thead><tbody>${data.map(e=>`
     <tr><td>${e.codigo}</td><td>${e.empresas?.razao_social || '—'}</td>
-    <td><button class="link-plain" onclick="excluirEstoque('${e.id}')">excluir</button></td></tr>`).join('')}</tbody></table>`;
+    <td>${editavel ? `<button class="link-plain" onclick="excluirEstoque('${e.id}')">excluir</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function renderListaEnderecos(data){
   if(!data || !data.length) return '<div class="empty">Nenhum endereço cadastrado.</div>';
+  const editavel = podeEditar('localizacoes');
   return `<table><thead><tr><th>Endereço</th><th></th></tr></thead><tbody>${data.map(e=>`
-    <tr><td>${e.caminho}</td><td><button class="link-plain" onclick="excluirEndereco('${e.id}')">excluir</button></td></tr>`).join('')}</tbody></table>`;
+    <tr><td>${e.caminho}</td><td>${editavel ? `<button class="link-plain" onclick="excluirEndereco('${e.id}')">excluir</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 
 async function excluirEstoque(id){
@@ -1904,7 +2032,7 @@ async function carregarOrdensServicoConfig(){
     <tr><td class="mono">${o.numero}</td><td>${o.equipamentos?.descricao || '—'}</td><td>${o.descricao || '—'}</td>
     <td>${o.empresas?.razao_social || '—'}</td><td class="mono">${o.data_abertura}</td>
     <td><span class="badge ${o.status==='concluida'?'processado':o.status==='cancelada'?'divergente':'pendente'}">${o.status}</span></td>
-    <td>${o.status==='aberta'||o.status==='em_andamento' ? `<button class="btn small secondary" onclick="concluirOrdemServico('${o.id}')">Concluir</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+    <td>${(o.status==='aberta'||o.status==='em_andamento') && podeEditar('frotas') ? `<button class="btn small secondary" onclick="concluirOrdemServico('${o.id}')">Concluir</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 async function atualizarEquipamentosDaOrdem(){
   const empresa_id = document.getElementById('ordem-empresa').value;
