@@ -218,6 +218,8 @@
         <button data-sub="fornecedores">Fornecedores</button>
         <button data-sub="insumos">Insumos</button>
         <button data-sub="localizacoes">Localizações</button>
+        <button data-sub="equipamentos">Equipamentos</button>
+        <button data-sub="ordens">Ordens de Serviço</button>
         <button data-sub="usuarios">Usuários</button>
       </div>
 
@@ -300,6 +302,34 @@
           <button class="btn small" onclick="salvarEndereco()">Adicionar endereço</button>
         </div>
         <div id="lista-enderecos"></div>
+      </div>
+
+      <div class="subview" id="sub-equipamentos">
+        <div class="inline-form">
+          <div id="equipamentos-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Empresa</label><select id="equipamento-empresa"></select></div>
+            <div class="field"><label>Código</label><input id="equipamento-codigo" placeholder="Ex: CAM-01"></div>
+            <div class="field"><label>Descrição</label><input id="equipamento-descricao" placeholder="Ex: Caminhão Munck"></div>
+          </div>
+          <button class="btn small" onclick="salvarEquipamento()">Adicionar equipamento</button>
+        </div>
+        <div id="lista-equipamentos"></div>
+      </div>
+
+      <div class="subview" id="sub-ordens">
+        <div class="inline-form">
+          <div id="ordens-msg"></div>
+          <div class="row-fields">
+            <div class="field"><label>Empresa</label><select id="ordem-empresa" onchange="atualizarEquipamentosDaOrdem()"></select></div>
+            <div class="field"><label>Número</label><input id="ordem-numero" placeholder="Ex: 2026-045"></div>
+            <div class="field"><label>Equipamento (opcional)</label><select id="ordem-equipamento"><option value="">— nenhum —</option></select></div>
+            <div class="field"><label>Data de abertura</label><input type="date" id="ordem-data"></div>
+          </div>
+          <div class="field"><label>Descrição do serviço</label><input id="ordem-descricao" placeholder="O que será feito"></div>
+          <button class="btn small" onclick="abrirOrdemServico()">Abrir ordem de serviço</button>
+        </div>
+        <div id="lista-ordens"></div>
       </div>
 
       <div class="subview" id="sub-usuarios">
@@ -1390,43 +1420,71 @@ async function abrirModalRequisicao(){
   abrirModal('modal-requisicao');
 }
 
-function addLinhaRequisicaoItem(){
+async function addLinhaRequisicaoItem(){
   const wrap = document.getElementById('req-itens');
   const row = document.createElement('div');
   row.className = 'item-row';
-  const rowId = 'req-item-' + Date.now() + Math.random().toString(36).slice(2,6);
-  row.dataset.rowId = rowId;
+  const selId = 'req-insumo-sel-' + Date.now() + Math.random().toString(36).slice(2,6);
   row.innerHTML = `
+    <div class="field"><label>Insumo (buscar no catálogo)</label><select id="${selId}" class="req-insumo-select"></select></div>
     <div class="field"><label>Código de barras</label>
       <div style="display:flex;gap:6px;">
         <input type="text" class="req-barcode" placeholder="Leia ou digite o código" style="flex:1;">
-        <button type="button" class="btn small secondary" onclick="iniciarLeituraCamera(this)">📷 Câmera</button>
+        <button type="button" class="btn small secondary" onclick="iniciarLeituraCamera(this)">📷</button>
       </div>
-      <div class="req-insumo-encontrado" style="font-size:11.5px;margin-top:4px;color:var(--text-dim);">Aguardando leitura…</div>
     </div>
     <div class="field"><label>Quantidade</label><input type="number" step="0.0001" class="req-qtd qtd"></div>
-    <button class="link-plain" onclick="this.closest('.item-row').remove()">remover</button>`;
+    <button class="link-plain" onclick="this.closest('.item-row').nextElementSibling?.remove(); this.closest('.item-row').remove();">remover</button>`;
   wrap.appendChild(row);
+
+  const status = document.createElement('div');
+  status.className = 'req-insumo-encontrado';
+  status.style.cssText = 'font-size:11.5px;margin:-4px 0 10px 2px;color:var(--text-dim);';
+  status.textContent = 'Aguardando leitura ou seleção…';
+  wrap.appendChild(status);
+
+  const { data: insumosDisponiveis } = await sb.from('insumos').select('id, codigo_interno, codigo_detalhe, marca, descricao').eq('ativo', true).order('descricao');
+  const sel = document.getElementById(selId);
+  sel.innerHTML = '<option value="">Selecione…</option>' + (insumosDisponiveis||[]).map(i=>`<option value="${i.id}">${formatarCodigoInsumo(i)} — ${i.descricao}</option>`).join('');
+  sel.addEventListener('change', () => selecionarInsumoManualNaLinha(row));
+
   const inputBarcode = row.querySelector('.req-barcode');
   const buscar = () => buscarInsumoPorCodigoBarrasNaLinha(row);
   inputBarcode.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); buscar(); } });
   inputBarcode.addEventListener('blur', buscar);
 }
 
+function statusDaLinha(row){
+  return row.nextElementSibling?.classList?.contains('req-insumo-encontrado') ? row.nextElementSibling : null;
+}
+
+function selecionarInsumoManualNaLinha(row){
+  const sel = row.querySelector('.req-insumo-select');
+  const info = statusDaLinha(row);
+  const opcao = sel.selectedOptions[0];
+  if(sel.value){
+    row.dataset.insumoId = sel.value;
+    row.querySelector('.req-barcode').value = '';
+    if(info){ info.textContent = `✓ ${opcao.text} (selecionado no catálogo)`; info.style.color = 'var(--ok)'; }
+  } else {
+    row.dataset.insumoId = '';
+    if(info){ info.textContent = 'Aguardando leitura ou seleção…'; info.style.color = 'var(--text-dim)'; }
+  }
+}
+
 async function buscarInsumoPorCodigoBarrasNaLinha(row){
   const codigo = row.querySelector('.req-barcode').value.trim();
-  const info = row.querySelector('.req-insumo-encontrado');
-  if(!codigo){ info.textContent = 'Aguardando leitura…'; info.style.color = 'var(--text-dim)'; row.dataset.insumoId = ''; return; }
-  const { data } = await sb.from('insumos').select('id, descricao, codigo_interno')
+  const info = statusDaLinha(row);
+  if(!codigo) return;
+  const { data } = await sb.from('insumos').select('id, descricao, codigo_interno, codigo_detalhe, marca')
     .or(`codigo_barras.eq.${codigo},codigo_interno.eq.${codigo}`).maybeSingle();
   if(data){
     row.dataset.insumoId = data.id;
-    info.textContent = `✓ ${formatarCodigoInsumo(data)} — ${data.descricao}`;
-    info.style.color = 'var(--ok)';
+    row.querySelector('.req-insumo-select').value = data.id;
+    if(info){ info.textContent = `✓ ${formatarCodigoInsumo(data)} — ${data.descricao}`; info.style.color = 'var(--ok)'; }
   } else {
     row.dataset.insumoId = '';
-    info.textContent = '✗ nenhum insumo encontrado com esse código';
-    info.style.color = 'var(--danger)';
+    if(info){ info.textContent = '✗ nenhum insumo encontrado com esse código'; info.style.color = 'var(--danger)'; }
   }
 }
 
@@ -1607,7 +1665,8 @@ async function carregarAlertas(){
 async function carregarConfigTudo(){
   await Promise.all([
     carregarEmpresasConfig(), carregarCentrosConfig(), carregarFornecedoresConfig(),
-    carregarInsumosConfig(), preencherSelectsLocaisConfig(), carregarLocaisConfig(), carregarUsuariosConfig()
+    carregarInsumosConfig(), preencherSelectsLocaisConfig(), carregarLocaisConfig(), carregarUsuariosConfig(),
+    carregarEquipamentosConfig(), carregarOrdensServicoConfig()
   ]);
 }
 
@@ -1810,6 +1869,68 @@ async function salvarEndereco(){
   const { error } = await sb.from('localizacoes').insert({ empresa_id: estoque.empresa_id, tipo:'endereco', parent_id: estoque_id, codigo });
   msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Endereço cadastrado.</div>';
   if(!error){ document.getElementById('endereco-codigo').value=''; carregarLocaisConfig(); }
+}
+
+/* --- Equipamentos --- */
+async function carregarEquipamentosConfig(){
+  await preencherSelect('equipamento-empresa', 'empresas', 'id', 'razao_social');
+  const { data } = await sb.from('equipamentos').select('codigo, descricao, ativo, empresas(razao_social)').order('codigo');
+  document.getElementById('lista-equipamentos').innerHTML = renderTabelaSimples(data?.map(e=>({
+    codigo: e.codigo, descricao: e.descricao, empresa: e.empresas?.razao_social
+  })), [ { campo:'codigo', titulo:'Código' }, { campo:'descricao', titulo:'Descrição' }, { campo:'empresa', titulo:'Empresa' } ], 'Nenhum equipamento cadastrado.');
+}
+async function salvarEquipamento(){
+  const msg = document.getElementById('equipamentos-msg');
+  const empresa_id = document.getElementById('equipamento-empresa').value;
+  const codigo = document.getElementById('equipamento-codigo').value.trim();
+  const descricao = document.getElementById('equipamento-descricao').value.trim();
+  if(!empresa_id || !codigo || !descricao){ msg.innerHTML = '<div class="msg error">Preencha empresa, código e descrição.</div>'; return; }
+  const { error } = await sb.from('equipamentos').insert({ empresa_id, codigo, descricao });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Equipamento cadastrado.</div>';
+  if(!error){ document.getElementById('equipamento-codigo').value=''; document.getElementById('equipamento-descricao').value=''; carregarEquipamentosConfig(); }
+}
+
+/* --- Ordens de Serviço --- */
+async function carregarOrdensServicoConfig(){
+  await preencherSelect('ordem-empresa', 'empresas', 'id', 'razao_social');
+  document.getElementById('ordem-data').value = new Date().toISOString().slice(0,10);
+  await atualizarEquipamentosDaOrdem();
+  const { data } = await sb.from('ordens_servico')
+    .select('id, numero, descricao, status, data_abertura, equipamentos(descricao), empresas(razao_social)')
+    .order('data_abertura', { ascending:false });
+  const box = document.getElementById('lista-ordens');
+  if(!data || !data.length){ box.innerHTML = '<div class="empty">Nenhuma ordem de serviço aberta.</div>'; return; }
+  box.innerHTML = `<table><thead><tr><th>Número</th><th>Equipamento</th><th>Descrição</th><th>Empresa</th><th>Abertura</th><th>Status</th><th></th></tr></thead><tbody>${data.map(o=>`
+    <tr><td class="mono">${o.numero}</td><td>${o.equipamentos?.descricao || '—'}</td><td>${o.descricao || '—'}</td>
+    <td>${o.empresas?.razao_social || '—'}</td><td class="mono">${o.data_abertura}</td>
+    <td><span class="badge ${o.status==='concluida'?'processado':o.status==='cancelada'?'divergente':'pendente'}">${o.status}</span></td>
+    <td>${o.status==='aberta'||o.status==='em_andamento' ? `<button class="btn small secondary" onclick="concluirOrdemServico('${o.id}')">Concluir</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+}
+async function atualizarEquipamentosDaOrdem(){
+  const empresa_id = document.getElementById('ordem-empresa').value;
+  const sel = document.getElementById('ordem-equipamento');
+  sel.innerHTML = '<option value="">— nenhum —</option>';
+  if(!empresa_id) return;
+  const { data } = await sb.from('equipamentos').select('id, descricao').eq('empresa_id', empresa_id);
+  (data||[]).forEach(e => sel.innerHTML += `<option value="${e.id}">${e.descricao}</option>`);
+}
+async function abrirOrdemServico(){
+  const msg = document.getElementById('ordens-msg');
+  const empresa_id = document.getElementById('ordem-empresa').value;
+  const numero = document.getElementById('ordem-numero').value.trim();
+  const equipamento_id = document.getElementById('ordem-equipamento').value || null;
+  const data_abertura = document.getElementById('ordem-data').value || new Date().toISOString().slice(0,10);
+  const descricao = document.getElementById('ordem-descricao').value.trim() || null;
+  if(!empresa_id || !numero){ msg.innerHTML = '<div class="msg error">Selecione a empresa e informe o número da ordem.</div>'; return; }
+  const { error } = await sb.from('ordens_servico').insert({ empresa_id, numero, equipamento_id, data_abertura, descricao, status: 'aberta' });
+  msg.innerHTML = error ? `<div class="msg error">${error.message}</div>` : '<div class="msg ok">Ordem de serviço aberta.</div>';
+  if(!error){ document.getElementById('ordem-numero').value=''; document.getElementById('ordem-descricao').value=''; carregarOrdensServicoConfig(); }
+}
+async function concluirOrdemServico(id){
+  if(!confirm('Marcar esta ordem de serviço como concluída?')) return;
+  const { error } = await sb.from('ordens_servico').update({ status:'concluida', data_conclusao: new Date().toISOString().slice(0,10) }).eq('id', id);
+  if(error){ alert('Erro: ' + error.message); return; }
+  carregarOrdensServicoConfig();
 }
 
 /* --- Usuários (papel + vínculo com empresa) --- */
